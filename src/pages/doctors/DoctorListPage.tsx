@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Plus, UserCheck, Star, Calendar, Mail, Phone, LayoutGrid, List } from 'lucide-react';
 import { doctorService } from '../../services/doctorService';
 import { Doctor } from '../../types/doctor';
@@ -9,10 +9,31 @@ import { useToast } from '../../context/ToastContext';
 
 export const DoctorListPage: React.FC = () => {
   const { showToast } = useToast();
-  const [doctors, setDoctors] = useState<Doctor[]>(() => doctorService.getAll());
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<string[]>(['ALL']);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [addModalOpen, setAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [docs, depts] = await Promise.all([
+          doctorService.getAll(),
+          doctorService.getDepartments()
+        ]);
+        setDoctors(docs);
+        setDepartments(['ALL', ...depts]);
+      } catch (err: any) {
+        showToast('error', 'Load failed', err?.message ?? 'Could not load doctors');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const [newDoctor, setNewDoctor] = useState({
     name: '',
@@ -25,30 +46,32 @@ export const DoctorListPage: React.FC = () => {
     consultationFee: 150
   });
 
-  const departments = ['ALL', ...doctorService.getDepartments()];
 
   const filteredDoctors = doctors.filter(d => {
     if (selectedDept !== 'ALL' && d.department !== selectedDept) return false;
     return true;
   });
 
-  const handleAddDoctor = (e: React.FormEvent) => {
+  const handleAddDoctor = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newDoctor.name) return;
 
-    const created = doctorService.create({
-      ...newDoctor,
-      workingDays: ['Monday', 'Wednesday', 'Friday'],
-      schedule: [
-        { day: 'Monday', startTime: '09:00 AM', endTime: '02:00 PM', room: 'Clinic 101' }
-      ],
-      status: 'Available',
-      rating: 5.0
-    });
-
-    setDoctors(doctorService.getAll());
-    setAddModalOpen(false);
-    showToast('success', 'Doctor Profile Created', `${created.name} registered under ${created.department}`);
+    try {
+      const created = await doctorService.create({
+        ...newDoctor,
+        workingDays: ['Monday', 'Wednesday', 'Friday'],
+        schedule: [
+          { day: 'Monday', startTime: '09:00 AM', endTime: '02:00 PM', room: 'Clinic 101' }
+        ],
+        status: 'Available',
+        rating: 5.0
+      });
+      setDoctors(await doctorService.getAll());
+      setAddModalOpen(false);
+      showToast('success', 'Doctor Profile Created', `${created.name} registered under ${created.department}`);
+    } catch (err: any) {
+      showToast('error', 'Failed to add doctor', err?.message ?? 'Unknown error');
+    }
   };
 
   return (
@@ -111,7 +134,7 @@ export const DoctorListPage: React.FC = () => {
               <div>
                 <div className="flex items-start justify-between">
                   <div className="w-12 h-12 rounded-xl bg-teal-50 text-teal-700 border border-teal-200 flex items-center justify-center font-bold text-base">
-                    {doctor.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                    {(doctor.name || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
                   </div>
                   <StatusBadge status={doctor.status} size="sm" />
                 </div>

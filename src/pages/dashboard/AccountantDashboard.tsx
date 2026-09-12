@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DollarSign, FileText, CheckCircle, Clock } from 'lucide-react';
 import { StatCard } from '../../components/common/StatCard';
@@ -9,11 +9,21 @@ import { formatCurrency } from '../../utils/formatters';
 
 export const AccountantDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const invoices = billingService.getInvoices();
-  const payments = billingService.getPayments();
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [payments, setPayments] = useState<any[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      billingService.getInvoices().catch(() => []),
+      billingService.getPayments().catch(() => [])
+    ]).then(([inv, pay]) => {
+      setInvoices(inv || []);
+      setPayments(pay || []);
+    });
+  }, []);
 
   const totalRevenueToday = 18450;
-  const pendingInvoices = invoices.filter(i => i.status === 'Pending' || i.status === 'Partially Paid');
+  const pendingInvoices = invoices.filter((i: any) => i.status === 'Pending' || i.status === 'Partially Paid');
 
   return (
     <div className="space-y-6">
@@ -25,7 +35,7 @@ export const AccountantDashboard: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Today's Collections" value={formatCurrency(totalRevenueToday)} icon={<DollarSign className="w-5 h-5" />} subtext="+15.4% vs target" color="emerald" />
         <StatCard title="Outstanding Invoices" value={pendingInvoices.length} icon={<Clock className="w-5 h-5" />} subtext="Pending settlement" color="amber" />
-        <StatCard title="Invoices Paid in Full" value={invoices.filter(i => i.status === 'Paid').length} icon={<CheckCircle className="w-5 h-5" />} subtext="Cleared accounts" color="blue" />
+        <StatCard title="Invoices Paid in Full" value={invoices.filter((i: any) => i.status === 'Paid').length} icon={<CheckCircle className="w-5 h-5" />} subtext="Cleared accounts" color="blue" />
         <StatCard title="Recent Transactions" value={payments.length} icon={<FileText className="w-5 h-5" />} subtext="Receipts issued" color="purple" />
       </div>
 
@@ -38,7 +48,7 @@ export const AccountantDashboard: React.FC = () => {
         </div>
 
         <div className="divide-y divide-slate-100">
-          {pendingInvoices.map(inv => (
+          {pendingInvoices.map((inv: any) => (
             <div key={inv.id} className="py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-slate-800">{inv.invoiceNumber} — {inv.patientName}</p>

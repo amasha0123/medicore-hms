@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CreditCard, Plus, Printer, DollarSign, Clock, CheckCircle2, AlertTriangle, FileText, ArrowRight } from 'lucide-react';
 import { billingService } from '../../services/billingService';
 import { patientService } from '../../services/patientService';
@@ -14,13 +14,29 @@ import { formatCurrency, formatDate } from '../../utils/formatters';
 
 export const BillingPage: React.FC = () => {
   const { showToast } = useToast();
-  const [invoices, setInvoices] = useState<Invoice[]>(() => billingService.getInvoices());
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [printInvoice, setPrintInvoice] = useState<Invoice | null>(null);
   const [payModalInvoice, setPayModalInvoice] = useState<Invoice | null>(null);
   const [printPayment, setPrintPayment] = useState<any | null>(null);
 
-  const patients = patientService.getAll();
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [invs, pats] = await Promise.all([billingService.getInvoices(), patientService.getAll()]);
+        setInvoices(invs);
+        setPatients(pats);
+      } catch (err: any) {
+        showToast('error', 'Load failed', err?.message ?? 'Could not load billing data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const [newInvoice, setNewInvoice] = useState({
     patientId: patients[0]?.id || '',
@@ -40,9 +56,9 @@ export const BillingPage: React.FC = () => {
   const totalRevenue = invoices.reduce((acc, i) => acc + i.paidAmount, 0);
   const totalOutstanding = invoices.reduce((acc, i) => acc + i.balanceDue, 0);
 
-  const handleCreateInvoice = (e: React.FormEvent) => {
+  const handleCreateInvoice = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pat = patients.find(p => p.id === newInvoice.patientId);
+    const pat = patients.find((p: any) => p.id === newInvoice.patientId);
     if (!pat) return;
 
     const subtotal = newInvoice.unitPrice * newInvoice.quantity;
@@ -51,11 +67,12 @@ export const BillingPage: React.FC = () => {
     const taxAmount = (taxable * newInvoice.taxPercentage) / 100;
     const totalAmount = taxable + taxAmount;
 
-    const created = billingService.createInvoice({
+    try {
+    const created = await billingService.createInvoice({
       patientId: pat.id,
       patientName: pat.fullName,
       patientPhone: pat.phone,
-      patientAddress: `${pat.address.street}, ${pat.address.city}`,
+      patientAddress: `${pat.address?.street ?? ''}, ${pat.address?.city ?? ''}`,
       date: new Date().toISOString().split('T')[0],
       dueDate: newInvoice.dueDate,
       items: [
@@ -80,32 +97,39 @@ export const BillingPage: React.FC = () => {
       notes: newInvoice.notes
     });
 
-    setInvoices(billingService.getInvoices());
+    setInvoices(await billingService.getInvoices());
     setCreateModalOpen(false);
     showToast('success', 'Invoice Generated', `Invoice ${created.invoiceNumber} created for ${created.patientName}`);
+    } catch (err: any) {
+      showToast('error', 'Failed to create invoice', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleRecordPayment = (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payModalInvoice) return;
 
-    const recorded = billingService.recordPayment({
-      invoiceId: payModalInvoice.id,
-      invoiceNumber: payModalInvoice.invoiceNumber,
-      patientId: payModalInvoice.patientId,
-      patientName: payModalInvoice.patientName,
-      amount: paymentAmount,
-      paymentDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      paymentMethod,
-      transactionRef: `TXN-${Math.random().toString(36).substring(7).toUpperCase()}`,
-      receivedBy: 'Hospital Cashier',
-      status: 'Successful'
-    });
+    try {
+      const recorded = await billingService.recordPayment({
+        invoiceId: payModalInvoice.id,
+        invoiceNumber: payModalInvoice.invoiceNumber,
+        patientId: payModalInvoice.patientId,
+        patientName: payModalInvoice.patientName,
+        amount: paymentAmount,
+        paymentDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        paymentMethod,
+        transactionRef: `TXN-${Math.random().toString(36).substring(7).toUpperCase()}`,
+        receivedBy: 'Hospital Cashier',
+        status: 'Successful'
+      });
 
-    setInvoices(billingService.getInvoices());
-    setPayModalInvoice(null);
-    showToast('success', 'Payment Recorded', `Receipt ${recorded.paymentNumber} issued for ${formatCurrency(paymentAmount)}`);
-    setPrintPayment(recorded);
+      setInvoices(await billingService.getInvoices());
+      setPayModalInvoice(null);
+      showToast('success', 'Payment Recorded', `Receipt ${recorded.paymentNumber} issued for ${formatCurrency(paymentAmount)}`);
+      setPrintPayment(recorded);
+    } catch (err: any) {
+      showToast('error', 'Payment failed', err?.message ?? 'Unknown error');
+    }
   };
 
   return (

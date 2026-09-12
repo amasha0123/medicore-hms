@@ -12,6 +12,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  username?: string;
   role: UserRole;
   department: string;
   avatar?: string;
@@ -19,6 +20,23 @@ export interface User {
   status: 'Active' | 'Inactive';
   lastLogin?: string;
   createdAt: string;
+}
+
+export interface RegisterData {
+  firstName: string;
+  lastName: string;
+  username: string;
+  email: string;
+  phone?: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface RegisterResponse {
+  success: boolean;
+  message: string;
+  user?: Partial<User> & { accountStatus?: string; isActive?: boolean };
+  data?: any;
 }
 
 export interface DemoAccount {

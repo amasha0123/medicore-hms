@@ -1,22 +1,48 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, AlertCircle, CheckCircle, Info, ExternalLink } from 'lucide-react';
 import { notificationService } from '../../services/notificationService';
 
 export const NotificationDropdown: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const notifications = notificationService.getAll();
-  const unreadCount = notifications.filter(n => !n.isRead).length;
+  const [notifications, setNotifications] = useState<any[]>([]);
   const navigate = useNavigate();
 
-  const handleMarkAllRead = () => {
-    notificationService.markAllAsRead();
+  const loadNotifications = async () => {
+    try {
+      const data = await notificationService.getAll();
+      setNotifications(data || []);
+    } catch {
+      setNotifications([]);
+    }
+  };
+
+  useEffect(() => {
+    loadNotifications();
+  }, [isOpen]);
+
+  const unreadCount = notifications.filter((n: any) => !n.isRead).length;
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      await loadNotifications();
+    } catch {
+      // Ignored
+    }
     setIsOpen(false);
   };
 
-  const handleItemClick = (link?: string, id?: string) => {
-    if (id) notificationService.markAsRead(id);
+  const handleItemClick = async (link?: string, id?: string) => {
+    if (id) {
+      try {
+        await notificationService.markAsRead(id);
+        await loadNotifications();
+      } catch {
+        // Ignored
+      }
+    }
     setIsOpen(false);
     if (link) navigate(link);
   };
@@ -57,7 +83,7 @@ export const NotificationDropdown: React.FC = () => {
 
             <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
               {notifications.length > 0 ? (
-                notifications.slice(0, 5).map(n => {
+                notifications.slice(0, 5).map((n: any) => {
                   let icon = <Info className="w-4 h-4 text-blue-500" />;
                   if (n.priority === 'Critical') icon = <AlertCircle className="w-4 h-4 text-rose-600" />;
                   else if (n.priority === 'Urgent') icon = <AlertCircle className="w-4 h-4 text-amber-500" />;

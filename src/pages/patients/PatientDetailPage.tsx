@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   User, Phone, Mail, MapPin, Calendar, Heart, ShieldAlert,
@@ -20,8 +20,57 @@ export const PatientDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
+  const [patient, setPatient] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [patientAppointments, setPatientAppointments] = useState<any[]>([]);
+  const [patientRecords, setPatientRecords] = useState<any[]>([]);
+  const [patientLabs, setPatientLabs] = useState<any[]>([]);
+  const [patientRx, setPatientRx] = useState<any[]>([]);
+  const [patientInvoices, setPatientInvoices] = useState<any[]>([]);
 
-  const patient = patientService.getById(id || '');
+  useEffect(() => {
+    let isMounted = true;
+    const loadPatientData = async () => {
+      if (!id) return;
+      try {
+        setLoading(true);
+        const p = await patientService.getById(id);
+        if (!isMounted) return;
+        setPatient(p);
+
+        if (p?.id) {
+          const [apts, emr, labs, rx, inv] = await Promise.all([
+            appointmentService.getAll().catch(() => []),
+            emrService.getByPatientId(p.id).catch(() => []),
+            labService.getAll().catch(() => []),
+            pharmacyService.getPrescriptions().catch(() => []),
+            billingService.getInvoices().catch(() => [])
+          ]);
+
+          if (!isMounted) return;
+          setPatientAppointments((apts || []).filter((a: any) => a.patientId === p.id));
+          setPatientRecords(emr || []);
+          setPatientLabs((labs || []).filter((l: any) => l.patientId === p.id));
+          setPatientRx((rx || []).filter((r: any) => r.patientId === p.id));
+          setPatientInvoices((inv || []).filter((i: any) => i.patientId === p.id));
+        }
+      } catch {
+        if (isMounted) setPatient(null);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+    loadPatientData();
+    return () => { isMounted = false; };
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="p-12 text-center text-xs text-slate-500 bg-white rounded-xl border border-slate-200">
+        Loading patient profile...
+      </div>
+    );
+  }
 
   if (!patient) {
     return (
@@ -36,12 +85,6 @@ export const PatientDetailPage: React.FC = () => {
       </div>
     );
   }
-
-  const patientAppointments = appointmentService.getAll().filter(a => a.patientId === patient.id);
-  const patientRecords = emrService.getByPatientId(patient.id);
-  const patientLabs = labService.getAll().filter(l => l.patientId === patient.id);
-  const patientRx = pharmacyService.getPrescriptions().filter(r => r.patientId === patient.id);
-  const patientInvoices = billingService.getInvoices().filter(i => i.patientId === patient.id);
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <User className="w-4 h-4" /> },
@@ -68,7 +111,7 @@ export const PatientDetailPage: React.FC = () => {
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-subtle flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-teal-500 text-white flex items-center justify-center font-bold text-2xl shadow-md shrink-0">
-            {patient.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+            {(patient.fullName || '').split(' ').map((n: string) => n[0]).join('').slice(0, 2)}
           </div>
           <div>
             <div className="flex items-center gap-2.5">
@@ -167,7 +210,7 @@ export const PatientDetailPage: React.FC = () => {
                 <span>Drug & Food Allergies</span>
               </h3>
               <div className="flex flex-wrap gap-1.5">
-                {patient.allergies.map((allergy, i) => (
+                {(patient.allergies || []).map((allergy: any, i: number) => (
                   <span key={i} className="text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-lg">
                     {allergy}
                   </span>
@@ -178,7 +221,7 @@ export const PatientDetailPage: React.FC = () => {
             <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-subtle">
               <h3 className="text-sm font-bold text-slate-800 mb-3">Chronic Conditions</h3>
               <div className="space-y-1.5">
-                {patient.chronicConditions.map((condition, i) => (
+                {(patient.chronicConditions || []).map((condition: any, i: number) => (
                   <div key={i} className="p-2 bg-slate-50 rounded-lg text-xs font-medium text-slate-700 flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
                     <span>{condition}</span>
@@ -196,7 +239,7 @@ export const PatientDetailPage: React.FC = () => {
           <h3 className="text-sm font-bold text-slate-800 mb-4">Chronological Clinical Encounters</h3>
           <div className="space-y-6">
             {patient.medicalHistory && patient.medicalHistory.length > 0 ? (
-              patient.medicalHistory.map((h, idx) => (
+              patient.medicalHistory.map((h: any, idx: number) => (
                 <div key={h.id || idx} className="relative pl-6 border-l-2 border-blue-200 pb-2">
                   <div className="absolute -left-2 top-0 w-4 h-4 rounded-full bg-blue-600 border-2 border-white" />
                   <span className="text-xs font-semibold text-slate-400">{formatDate(h.date)} • {h.type}</span>
@@ -232,7 +275,7 @@ export const PatientDetailPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {patientAppointments.map(a => (
+              {patientAppointments.map((a: any) => (
                 <tr key={a.id}>
                   <td className="py-3 px-4 font-mono font-semibold text-blue-600">{a.appointmentNumber}</td>
                   <td className="py-3 px-4 text-slate-800 font-medium">{a.doctorName}</td>
@@ -249,7 +292,7 @@ export const PatientDetailPage: React.FC = () => {
       {/* Tab: EMR Records */}
       {activeTab === 'emr' && (
         <div className="space-y-4">
-          {patientRecords.map(rec => (
+          {patientRecords.map((rec: any) => (
             <div key={rec.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-subtle">
               <div className="flex justify-between items-start border-b border-slate-100 pb-3">
                 <div>
@@ -282,7 +325,7 @@ export const PatientDetailPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {patientLabs.map(l => (
+              {patientLabs.map((l: any) => (
                 <tr key={l.id}>
                   <td className="py-3 px-4 font-mono font-semibold text-blue-600">{l.testCode}</td>
                   <td className="py-3 px-4 font-bold text-slate-800">{l.testName}</td>
@@ -299,13 +342,13 @@ export const PatientDetailPage: React.FC = () => {
       {/* Tab: Prescriptions */}
       {activeTab === 'prescriptions' && (
         <div className="space-y-3">
-          {patientRx.map(rx => (
+          {patientRx.map((rx: any) => (
             <div key={rx.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-subtle flex justify-between items-center">
               <div>
                 <p className="font-mono text-xs font-bold text-blue-600">{rx.prescriptionNumber}</p>
                 <p className="text-xs text-slate-500">Dr. {rx.doctorName} • {formatDate(rx.date)}</p>
                 <div className="mt-2 text-xs font-semibold text-slate-800">
-                  {rx.items.map(i => `${i.medicineName} (${i.dosage}) - ${i.frequency}`).join('; ')}
+                  {rx.items.map((i: any) => `${i.medicineName} (${i.dosage}) - ${i.frequency}`).join('; ')}
                 </div>
               </div>
               <StatusBadge status={rx.status} size="sm" />
@@ -328,7 +371,7 @@ export const PatientDetailPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {patientInvoices.map(inv => (
+              {patientInvoices.map((inv: any) => (
                 <tr key={inv.id}>
                   <td className="py-3 px-4 font-mono font-semibold text-blue-600">{inv.invoiceNumber}</td>
                   <td className="py-3 px-4 text-slate-500">{formatDate(inv.date)}</td>

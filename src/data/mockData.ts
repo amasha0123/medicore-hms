@@ -18,7 +18,7 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     role: 'ADMIN',
     email: 'admin@medicore.hospital',
     badge: 'AD',
-    name: 'Eleanor Vance',
+    name: 'Alexander Wright',
     department: 'Hospital Administration',
     description: 'Full administrative access to hospital KPIs, revenue, staff, settings & audit logs'
   },
@@ -27,52 +27,52 @@ export const DEMO_ACCOUNTS: DemoAccount[] = [
     role: 'DOCTOR',
     email: 'dr.chen@medicore.hospital',
     badge: 'DO',
-    name: 'Dr. Michael Chen, MD',
+    name: 'Dr. Sarah Chen',
     department: 'Cardiology',
     description: 'Patient queue, clinical encounters, EMR records, prescriptions & lab orders'
   },
   {
     roleName: 'Nurse',
     role: 'NURSE',
-    email: 'nurse.patel@medicore.hospital',
+    email: 'nurse.sarah@medicore.hospital',
     badge: 'NU',
-    name: 'Priya Patel, RN',
-    department: 'Inpatient Care / Ward 3',
+    name: 'Nurse Sarah Jenkins',
+    department: 'General Care',
     description: 'Assigned patients, vitals recording, bed management & care checklists'
   },
   {
     roleName: 'Receptionist',
     role: 'RECEPTIONIST',
-    email: 'reception@medicore.hospital',
+    email: 'rec.mark@medicore.hospital',
     badge: 'RE',
-    name: 'Sarah Jenkins',
+    name: 'Mark Davis',
     department: 'Front Desk & Admissions',
     description: 'Appointment scheduling, patient registration & outpatient intake'
   },
   {
     roleName: 'Laboratory Staff',
     role: 'LAB_STAFF',
-    email: 'lab.garcia@medicore.hospital',
+    email: 'lab.david@medicore.hospital',
     badge: 'LA',
-    name: 'Marco Garcia, MLS',
+    name: 'David Kim',
     department: 'Diagnostic Laboratory',
     description: 'Test requests queue, sample collection & test result entry'
   },
   {
     roleName: 'Pharmacist',
     role: 'PHARMACIST',
-    email: 'pharmacy@medicore.hospital',
+    email: 'pharm.lisa@medicore.hospital',
     badge: 'PH',
-    name: 'Amara Okafor, PharmD',
+    name: 'Lisa Ray',
     department: 'Central Pharmacy',
     description: 'Prescription dispensing, inventory levels & drug stock alerts'
   },
   {
     roleName: 'Accountant',
     role: 'ACCOUNTANT',
-    email: 'accounts@medicore.hospital',
+    email: 'acc.robert@medicore.hospital',
     badge: 'AC',
-    name: 'David Sterling, CPA',
+    name: 'Robert Vance',
     department: 'Finance & Billing',
     description: 'Patient billing, invoice generation, payment processing & revenue reports'
   }

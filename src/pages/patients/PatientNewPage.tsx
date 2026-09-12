@@ -10,6 +10,7 @@ export const PatientNewPage: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [step, setStep] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
 
   const [formData, setFormData] = useState({
     // Step 1: Personal
@@ -66,54 +67,60 @@ export const PatientNewPage: React.FC = () => {
     return Math.max(1, Math.abs(new Date(diff).getUTCFullYear() - 1970));
   };
 
-  const handleSubmit = (createAppointment = false) => {
+  const handleSubmit = async (createAppointment = false) => {
     if (!validateStep(1)) {
       setStep(1);
       return;
     }
 
-    const newPatient = patientService.create({
-      fullName: formData.fullName,
-      dateOfBirth: formData.dateOfBirth,
-      age: calculateAge(formData.dateOfBirth),
-      gender: formData.gender,
-      bloodGroup: formData.bloodGroup,
-      nationalId: formData.nationalId,
-      phone: formData.phone,
-      email: formData.email || `${formData.fullName.toLowerCase().replace(/\s+/g, '.')}@email.com`,
-      address: {
-        street: formData.street || '123 Health Way',
-        city: formData.city || 'Metropolis',
-        province: formData.province || 'Metro Central'
-      },
-      emergencyContact: {
-        name: formData.emergencyName || 'Family Member',
-        relationship: formData.emergencyRelationship || 'Relative',
-        phone: formData.emergencyPhone || formData.phone
-      },
-      allergies: formData.allergies ? formData.allergies.split(',').map(s => s.trim()) : ['None recorded'],
-      chronicConditions: formData.chronicConditions ? formData.chronicConditions.split(',').map(s => s.trim()) : [],
-      status: 'Active',
-      primaryDepartment: formData.primaryDepartment,
-      lastVisit: new Date().toISOString().split('T')[0],
-      medicalHistory: formData.medicalHistoryNotes ? [
-        {
-          id: 'mh-init',
-          date: new Date().toISOString().split('T')[0],
-          type: 'Consultation',
-          title: 'Initial Intake Registration',
-          doctorName: 'Dr. Michael Chen',
-          notes: formData.medicalHistoryNotes
-        }
-      ] : []
-    });
+    try {
+      setSubmitting(true);
+      const newPatient = await patientService.create({
+        fullName: formData.fullName,
+        dateOfBirth: formData.dateOfBirth,
+        age: calculateAge(formData.dateOfBirth),
+        gender: formData.gender,
+        bloodGroup: formData.bloodGroup,
+        nationalId: formData.nationalId,
+        phone: formData.phone,
+        email: formData.email || `${formData.fullName.toLowerCase().replace(/\s+/g, '.')}@email.com`,
+        address: {
+          street: formData.street || '123 Health Way',
+          city: formData.city || 'Metropolis',
+          province: formData.province || 'Metro Central'
+        },
+        emergencyContact: {
+          name: formData.emergencyName || 'Family Member',
+          relationship: formData.emergencyRelationship || 'Relative',
+          phone: formData.emergencyPhone || formData.phone
+        },
+        allergies: formData.allergies ? formData.allergies.split(',').map(s => s.trim()) : ['None recorded'],
+        chronicConditions: formData.chronicConditions ? formData.chronicConditions.split(',').map(s => s.trim()) : [],
+        status: 'Active',
+        primaryDepartment: formData.primaryDepartment,
+        lastVisit: new Date().toISOString().split('T')[0],
+        medicalHistory: formData.medicalHistoryNotes ? [
+          {
+            date: new Date().toISOString().split('T')[0],
+            type: 'Consultation',
+            title: 'Initial Intake Registration',
+            doctorName: 'Dr. Michael Chen',
+            notes: formData.medicalHistoryNotes
+          }
+        ] : []
+      });
 
-    showToast('success', 'Patient Registered Successfully', `${newPatient.fullName} assigned ID ${newPatient.patientNumber}`);
+      showToast('success', 'Patient Registered Successfully', `${newPatient.fullName} assigned ID ${newPatient.patientNumber}`);
 
-    if (createAppointment) {
-      navigate('/appointments');
-    } else {
-      navigate(`/patients/${newPatient.id}`);
+      if (createAppointment) {
+        navigate('/appointments');
+      } else {
+        navigate(`/patients/${newPatient.id}`);
+      }
+    } catch (err: any) {
+      showToast('error', 'Registration Failed', err?.message ?? 'Could not save patient. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -450,17 +457,19 @@ export const PatientNewPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleSubmit(true)}
-                  className="px-4 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                  disabled={submitting}
+                  className="px-4 py-2 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition disabled:opacity-50"
                 >
                   Save & Book Appointment
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSubmit(false)}
-                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 px-5 py-2 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition disabled:opacity-50"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  <span>Save Patient</span>
+                  <span>{submitting ? 'Saving...' : 'Save Patient'}</span>
                 </button>
               </>
             )}

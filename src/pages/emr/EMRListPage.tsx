@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FileSpreadsheet, Plus, Printer, Search, User, Activity, Stethoscope } from 'lucide-react';
 import { emrService } from '../../services/emrService';
 import { patientService } from '../../services/patientService';
@@ -12,17 +12,17 @@ import { triggerPrint } from '../../utils/printUtils';
 
 export const EMRListPage: React.FC = () => {
   const { showToast } = useToast();
-  const [records, setRecords] = useState<MedicalRecord[]>(() => emrService.getAll());
+  const [records, setRecords] = useState<MedicalRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<MedicalRecord | null>(null);
-
-  const patients = patientService.getAll();
-  const doctors = doctorService.getAll();
+  const [patients, setPatients] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
 
   const [newRecord, setNewRecord] = useState({
-    patientId: patients[0]?.id || '',
-    doctorId: doctors[0]?.id || '',
+    patientId: '',
+    doctorId: '',
     chiefComplaint: '',
     symptoms: '',
     diagnosisCode: 'I10',
@@ -41,18 +41,47 @@ export const EMRListPage: React.FC = () => {
     orderedLabs: ''
   });
 
+  useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const [recs, pats, docs] = await Promise.all([
+          emrService.getAll(),
+          patientService.getAll(),
+          doctorService.getAll()
+        ]);
+        setRecords(recs);
+        setPatients(pats);
+        setDoctors(docs);
+        setNewRecord(prev => ({
+          ...prev,
+          patientId: pats[0]?.id || '',
+          doctorId: docs[0]?.id || ''
+        }));
+      } catch (err: any) {
+        showToast('error', 'Failed to load EMR data', err?.message ?? 'Unknown error');
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
+
   const filteredRecords = records.filter(r =>
-    r.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.recordNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.diagnosisDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.doctorName.toLowerCase().includes(searchQuery.toLowerCase())
+    r.patientName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.recordNumber?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.diagnosisDescription?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    r.doctorName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleCreateRecord = (e: React.FormEvent) => {
+  const handleCreateRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     const pat = patients.find(p => p.id === newRecord.patientId);
     const doc = doctors.find(d => d.id === newRecord.doctorId);
-    if (!pat || !doc) return;
+    if (!pat || !doc) {
+      showToast('error', 'Validation Error', 'Please select a valid patient and doctor');
+      return;
+    }
 
     const prescriptions: PrescriptionItem[] = newRecord.medicineName ? [
       {
@@ -65,34 +94,39 @@ export const EMRListPage: React.FC = () => {
       }
     ] : [];
 
-    const created = emrService.create({
-      patientId: pat.id,
-      patientName: pat.fullName,
-      doctorId: doc.id,
-      doctorName: doc.name,
-      department: doc.department,
-      visitDate: new Date().toISOString().split('T')[0],
-      chiefComplaint: newRecord.chiefComplaint || 'Routine medical encounter',
-      symptoms: newRecord.symptoms ? newRecord.symptoms.split(',').map(s => s.trim()) : ['General assessment'],
-      diagnosisCode: newRecord.diagnosisCode,
-      diagnosisDescription: newRecord.diagnosisDescription,
-      vitals: {
-        bloodPressure: newRecord.bp,
-        heartRate: Number(newRecord.heartRate),
-        temperature: Number(newRecord.temp),
-        oxygenSaturation: Number(newRecord.spo2),
-        respiratoryRate: Number(newRecord.respRate),
-        recordedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
-      },
-      clinicalNotes: newRecord.clinicalNotes || 'Patient evaluated. Systems stable.',
-      treatmentPlan: newRecord.treatmentPlan || 'Continue home medications.',
-      prescriptions,
-      orderedLabTests: newRecord.orderedLabs ? newRecord.orderedLabs.split(',').map(s => s.trim()) : []
-    });
+    try {
+      const created = await emrService.create({
+        patientId: pat.id,
+        patientName: pat.fullName,
+        doctorId: doc.id,
+        doctorName: doc.name,
+        department: doc.department,
+        visitDate: new Date().toISOString().split('T')[0],
+        chiefComplaint: newRecord.chiefComplaint || 'Routine medical encounter',
+        symptoms: newRecord.symptoms ? newRecord.symptoms.split(',').map((s: string) => s.trim()) : ['General assessment'],
+        diagnosisCode: newRecord.diagnosisCode,
+        diagnosisDescription: newRecord.diagnosisDescription,
+        vitals: {
+          bloodPressure: newRecord.bp,
+          heartRate: Number(newRecord.heartRate),
+          temperature: Number(newRecord.temp),
+          oxygenSaturation: Number(newRecord.spo2),
+          respiratoryRate: Number(newRecord.respRate),
+          recordedAt: new Date().toISOString().replace('T', ' ').substring(0, 16)
+        },
+        clinicalNotes: newRecord.clinicalNotes || 'Patient evaluated. Systems stable.',
+        treatmentPlan: newRecord.treatmentPlan || 'Continue home medications.',
+        prescriptions,
+        orderedLabTests: newRecord.orderedLabs ? newRecord.orderedLabs.split(',').map((s: string) => s.trim()) : []
+      });
 
-    setRecords(emrService.getAll());
-    setCreateModalOpen(false);
-    showToast('success', 'Medical Record Created', `Encounter saved as ${created.recordNumber}`);
+      const updatedRecords = await emrService.getAll();
+      setRecords(updatedRecords);
+      setCreateModalOpen(false);
+      showToast('success', 'Medical Record Created', `Encounter saved as ${created?.recordNumber ?? 'new record'}`);
+    } catch (err: any) {
+      showToast('error', 'Failed to create medical record', err?.message ?? 'Unknown error');
+    }
   };
 
   return (
@@ -123,93 +157,100 @@ export const EMRListPage: React.FC = () => {
         />
       </div>
 
-      {/* EMR Cards Feed */}
-      <div className="space-y-4">
-        {filteredRecords.map(record => (
-          <div key={record.id} className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-subtle hover:shadow-card transition">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
-                  <Stethoscope className="w-5 h-5" />
+      {loading ? (
+        <div className="flex items-center justify-center h-40 text-slate-400">Loading medical records...</div>
+      ) : (
+        /* EMR Cards Feed */
+        <div className="space-y-4">
+          {filteredRecords.map(record => (
+            <div key={record.id} className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-subtle hover:shadow-card transition">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                    <Stethoscope className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-blue-600">{record.recordNumber}</span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-xs text-slate-400">{formatDate(record.visitDate)}</span>
+                    </div>
+                    <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                      {record.patientName} — <span className="text-blue-700 font-semibold">{record.diagnosisDescription}</span> ({record.diagnosisCode})
+                    </h3>
+                    <p className="text-xs text-slate-500 font-medium">Attending Physician: {record.doctorName} ({record.department})</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedRecord(record)}
+                    className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
+                  >
+                    View Full Chart
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedRecord(record);
+                      setTimeout(() => triggerPrint(), 300);
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 border border-slate-200 rounded-lg transition"
+                    title="Print Clinical Summary"
+                  >
+                    <Printer className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Vitals Ribbon */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 my-4 p-3 bg-slate-50/70 rounded-xl text-xs">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400">Blood Pressure</span>
+                  <p className="font-bold text-slate-800">{record.vitals?.bloodPressure} mmHg</p>
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs font-bold text-blue-600">{record.recordNumber}</span>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-xs text-slate-400">{formatDate(record.visitDate)}</span>
-                  </div>
-                  <h3 className="text-base font-bold text-slate-900 mt-0.5">
-                    {record.patientName} — <span className="text-blue-700 font-semibold">{record.diagnosisDescription}</span> ({record.diagnosisCode})
-                  </h3>
-                  <p className="text-xs text-slate-500 font-medium">Attending Physician: {record.doctorName} ({record.department})</p>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400">Heart Rate</span>
+                  <p className="font-bold text-slate-800">{record.vitals?.heartRate} bpm</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400">SpO2</span>
+                  <p className="font-bold text-slate-800">{record.vitals?.oxygenSaturation}%</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400">Temperature</span>
+                  <p className="font-bold text-slate-800">{record.vitals?.temperature}°C</p>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400">Resp Rate</span>
+                  <p className="font-bold text-slate-800">{record.vitals?.respiratoryRate} /min</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setSelectedRecord(record)}
-                  className="px-3 py-1.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition"
-                >
-                  View Full Chart
-                </button>
-                <button
-                  onClick={() => {
-                    setSelectedRecord(record);
-                    setTimeout(() => triggerPrint(), 300);
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-slate-600 border border-slate-200 rounded-lg transition"
-                  title="Print Clinical Summary"
-                >
-                  <Printer className="w-4 h-4" />
-                </button>
+              {/* Clinical Content */}
+              <div className="space-y-2 text-xs text-slate-700">
+                <p><strong className="text-slate-900 font-semibold">Chief Complaint:</strong> {record.chiefComplaint}</p>
+                <p><strong className="text-slate-900 font-semibold">Clinical Examination Notes:</strong> {record.clinicalNotes}</p>
+                <p><strong className="text-slate-900 font-semibold">Treatment Plan:</strong> {record.treatmentPlan}</p>
               </div>
-            </div>
 
-            {/* Vitals Ribbon */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 my-4 p-3 bg-slate-50/70 rounded-xl text-xs">
-              <div>
-                <span className="text-[10px] uppercase font-semibold text-slate-400">Blood Pressure</span>
-                <p className="font-bold text-slate-800">{record.vitals.bloodPressure} mmHg</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-semibold text-slate-400">Heart Rate</span>
-                <p className="font-bold text-slate-800">{record.vitals.heartRate} bpm</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-semibold text-slate-400">SpO2</span>
-                <p className="font-bold text-slate-800">{record.vitals.oxygenSaturation}%</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-semibold text-slate-400">Temperature</span>
-                <p className="font-bold text-slate-800">{record.vitals.temperature}°C</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-semibold text-slate-400">Resp Rate</span>
-                <p className="font-bold text-slate-800">{record.vitals.respiratoryRate} /min</p>
-              </div>
+              {/* Prescriptions and Labs */}
+              {record.prescriptions && record.prescriptions.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="text-slate-400 font-semibold text-[10px] uppercase">Prescriptions:</span>
+                  {record.prescriptions.map((rx: any, idx: number) => (
+                    <span key={idx} className="bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full font-medium">
+                      {rx.medicineName} ({rx.dosage}) - {rx.frequency}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
-
-            {/* Clinical Content */}
-            <div className="space-y-2 text-xs text-slate-700">
-              <p><strong className="text-slate-900 font-semibold">Chief Complaint:</strong> {record.chiefComplaint}</p>
-              <p><strong className="text-slate-900 font-semibold">Clinical Examination Notes:</strong> {record.clinicalNotes}</p>
-              <p><strong className="text-slate-900 font-semibold">Treatment Plan:</strong> {record.treatmentPlan}</p>
-            </div>
-
-            {/* Prescriptions and Labs */}
-            {record.prescriptions && record.prescriptions.length > 0 && (
-              <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
-                <span className="text-slate-400 font-semibold text-[10px] uppercase">Prescriptions:</span>
-                {record.prescriptions.map((rx, idx) => (
-                  <span key={idx} className="bg-blue-50 text-blue-800 border border-blue-200 px-2.5 py-0.5 rounded-full font-medium">
-                    {rx.medicineName} ({rx.dosage}) - {rx.frequency}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+          ))}
+          {filteredRecords.length === 0 && !loading && (
+            <div className="text-center py-12 text-slate-400 text-sm">No medical records found.</div>
+          )}
+        </div>
+      )}
 
       {/* New Clinical Encounter Modal */}
       <Modal isOpen={createModalOpen} onClose={() => setCreateModalOpen(false)} title="New Electronic Medical Record (EMR)" maxWidth="2xl">

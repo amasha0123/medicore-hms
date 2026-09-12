@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bed as BedIcon, Plus, CheckCircle2, AlertTriangle, ShieldCheck, User, ArrowRight } from 'lucide-react';
 import { admissionService } from '../../services/admissionService';
 import { patientService } from '../../services/patientService';
@@ -13,13 +13,36 @@ import { formatDate } from '../../utils/formatters';
 
 export const AdmissionsPage: React.FC = () => {
   const { showToast } = useToast();
-  const [beds, setBeds] = useState<Bed[]>(() => admissionService.getBeds());
-  const [admissions, setAdmissions] = useState<AdmissionRecord[]>(() => admissionService.getAdmissions());
+  const [beds, setBeds] = useState<any[]>([]);
+  const [admissions, setAdmissions] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedWard, setSelectedWard] = useState<string>('ALL');
-  const [admitModalBed, setAdmitModalBed] = useState<Bed | null>(null);
+  const [admitModalBed, setAdmitModalBed] = useState<any | null>(null);
 
-  const patients = patientService.getAll();
-  const doctors = doctorService.getAll();
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [b, adm, pats, docs] = await Promise.all([
+          admissionService.getBeds(),
+          admissionService.getAdmissions(),
+          patientService.getAll(),
+          doctorService.getAll()
+        ]);
+        setBeds(b);
+        setAdmissions(adm);
+        setPatients(pats);
+        setDoctors(docs);
+      } catch (err: any) {
+        showToast('error', 'Load failed', err?.message ?? 'Could not load admission data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const [admitForm, setAdmitForm] = useState({
     patientId: patients[0]?.id || '',
@@ -37,42 +60,52 @@ export const AdmissionsPage: React.FC = () => {
   const availableBeds = beds.filter(b => b.status === 'Available').length;
   const maintenanceBeds = beds.filter(b => b.status === 'Maintenance').length;
 
-  const handleAdmit = (e: React.FormEvent) => {
+  const handleAdmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!admitModalBed) return;
-    const pat = patients.find(p => p.id === admitForm.patientId);
-    const doc = doctors.find(d => d.id === admitForm.doctorId);
+    const pat = patients.find((p: any) => p.id === admitForm.patientId);
+    const doc = doctors.find((d: any) => d.id === admitForm.doctorId);
     if (!pat || !doc) return;
 
-    admissionService.admitPatient({
-      patientId: pat.id,
-      patientName: pat.fullName,
-      patientAge: pat.age,
-      patientGender: pat.gender,
-      ward: admitModalBed.ward,
-      roomNumber: admitModalBed.roomNumber,
-      bedNumber: admitModalBed.bedNumber,
-      attendingDoctorId: doc.id,
-      attendingDoctorName: doc.name,
-      admissionDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      diagnosis: admitForm.diagnosis,
-      emergencyContact: `${pat.emergencyContact.name} (${pat.emergencyContact.phone})`,
-      insuranceProvider: admitForm.insurance
-    });
+    try {
+      await admissionService.admitPatient({
+        patientId: pat.id,
+        patientName: pat.fullName,
+        patientAge: pat.age,
+        patientGender: pat.gender,
+        ward: admitModalBed.ward,
+        roomNumber: admitModalBed.roomNumber,
+        bedNumber: admitModalBed.bedNumber,
+        attendingDoctorId: doc.id,
+        attendingDoctorName: doc.name,
+        admissionDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        diagnosis: admitForm.diagnosis,
+        emergencyContact: `${pat.emergencyContact?.name ?? ''} (${pat.emergencyContact?.phone ?? ''})`,
+        insuranceProvider: admitForm.insurance
+      });
 
-    setBeds(admissionService.getBeds());
-    setAdmissions(admissionService.getAdmissions());
-    setAdmitModalBed(null);
-    showToast('success', 'Patient Admitted', `${pat.fullName} assigned to Bed ${admitModalBed.bedNumber}`);
+      const [b, adm] = await Promise.all([admissionService.getBeds(), admissionService.getAdmissions()]);
+      setBeds(b);
+      setAdmissions(adm);
+      setAdmitModalBed(null);
+      showToast('success', 'Patient Admitted', `${pat.fullName} assigned to Bed ${admitModalBed.bedNumber}`);
+    } catch (err: any) {
+      showToast('error', 'Admission failed', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleDischarge = (bed: Bed) => {
-    const activeAdm = admissions.find(a => a.bedNumber === bed.bedNumber && a.status !== 'Discharged');
+  const handleDischarge = async (bed: any) => {
+    const activeAdm = admissions.find((a: any) => a.bedNumber === bed.bedNumber && a.status !== 'Discharged');
     if (activeAdm) {
-      admissionService.dischargePatient(activeAdm.id, bed.bedNumber);
-      setBeds(admissionService.getBeds());
-      setAdmissions(admissionService.getAdmissions());
-      showToast('info', 'Patient Discharged', `Bed ${bed.bedNumber} is now Available and sanitized.`);
+      try {
+        await admissionService.dischargePatient(activeAdm.id);
+        const [b, adm] = await Promise.all([admissionService.getBeds(), admissionService.getAdmissions()]);
+        setBeds(b);
+        setAdmissions(adm);
+        showToast('info', 'Patient Discharged', `Bed ${bed.bedNumber} is now Available and sanitized.`);
+      } catch (err: any) {
+        showToast('error', 'Discharge failed', err?.message ?? 'Unknown error');
+      }
     }
   };
 

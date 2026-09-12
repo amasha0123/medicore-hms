@@ -1,22 +1,21 @@
 
-import { Notification } from '../types/notification';
-import { INITIAL_NOTIFICATIONS } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
-
-const NOTIF_KEY = 'medicore_notifications';
+import { apiClient } from './apiClient';
 
 export const notificationService = {
-  getAll(): Notification[] {
-    return getStoredItem<Notification[]>(NOTIF_KEY, INITIAL_NOTIFICATIONS);
+  async getAll(): Promise<any[]> {
+    const res = await apiClient.get<any>('/api/v1/notifications');
+    return Array.isArray(res) ? res : (res?.notifications ?? res ?? []);
   },
 
-  markAsRead(id: string): void {
-    const list = this.getAll();
-    setStoredItem(NOTIF_KEY, list.map(n => n.id === id ? { ...n, isRead: true } : n));
+  async markAsRead(id: string): Promise<void> {
+    return apiClient.patch<void>(`/api/v1/notifications/${id}/read`, {});
   },
 
-  markAllAsRead(): void {
-    const list = this.getAll();
-    setStoredItem(NOTIF_KEY, list.map(n => ({ ...n, isRead: true })));
+  async markAllAsRead(): Promise<void> {
+    return apiClient.patch<void>('/api/v1/notifications/read-all', {});
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/notifications/${id}`);
   }
 };

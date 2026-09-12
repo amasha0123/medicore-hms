@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ShieldCheck, HeartPulse, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -27,7 +27,7 @@ export const LoginPage: React.FC = () => {
 
   const handleDemoClick = (account: DemoAccount) => {
     setEmail(account.email);
-    setPassword('medicore2026!');
+    setPassword('');
     setSelectedDemoRole(account.role);
     setErrors({});
     showToast('info', `Credentials loaded for ${account.roleName}`, 'Click "Sign in to MediCore" to proceed.');
@@ -49,27 +49,58 @@ export const LoginPage: React.FC = () => {
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+
+    if (!validate()) {
+      return;
+    }
 
     setIsLoading(true);
-    setTimeout(() => {
-      try {
-        login(email, password, rememberMe);
-        setIsLoading(false);
-        setIsSuccess(true);
-        showToast('success', 'Authentication Successful', 'Welcome to MediCore Hospital Management System.');
-        setTimeout(() => {
-          navigate('/dashboard');
-        }, 600);
-      } catch (err: any) {
-        setIsLoading(false);
-        setErrors({ email: err.message || 'Authentication failed' });
-        showToast('error', 'Login Failed', err.message);
-      }
-    }, 750);
+    setIsSuccess(false);
+    setErrors({});
+
+    try {
+      await login(
+        email.trim(),
+        password,
+        rememberMe
+      );
+
+      setIsLoading(false);
+      setIsSuccess(true);
+
+      showToast(
+        'success',
+        'Authentication Successful',
+        'Welcome to MediCore Hospital Management System.'
+      );
+
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 600);
+    } catch (err: any) {
+      setIsLoading(false);
+      setIsSuccess(false);
+
+      const message =
+        err?.message ||
+        'Invalid email or password';
+
+      setErrors({
+        email: message,
+      });
+
+      showToast(
+        'error',
+        'Login Failed',
+        message
+      );
+    }
   };
+
+
 
   const handleForgotPassword = (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,11 +148,10 @@ export const LoginPage: React.FC = () => {
                     if (errors.email) setErrors({ ...errors, email: undefined });
                   }}
                   placeholder="you@medicore.hospital"
-                  className={`w-full pl-9 pr-3.5 py-2.5 bg-slate-50 text-slate-800 text-sm rounded-xl border transition ${
-                    errors.email
-                      ? 'border-rose-300 focus:ring-2 focus:ring-rose-400/20 focus:border-rose-500 bg-rose-50/20'
-                      : 'border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600'
-                  }`}
+                  className={`w-full pl-9 pr-3.5 py-2.5 bg-slate-50 text-slate-800 text-sm rounded-xl border transition ${errors.email
+                    ? 'border-rose-300 focus:ring-2 focus:ring-rose-400/20 focus:border-rose-500 bg-rose-50/20'
+                    : 'border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600'
+                    }`}
                 />
               </div>
               {errors.email && (
@@ -155,11 +185,10 @@ export const LoginPage: React.FC = () => {
                     if (errors.password) setErrors({ ...errors, password: undefined });
                   }}
                   placeholder="Enter your password"
-                  className={`w-full pl-9 pr-10 py-2.5 bg-slate-50 text-slate-800 text-sm rounded-xl border transition ${
-                    errors.password
-                      ? 'border-rose-300 focus:ring-2 focus:ring-rose-400/20 focus:border-rose-500 bg-rose-50/20'
-                      : 'border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600'
-                  }`}
+                  className={`w-full pl-9 pr-10 py-2.5 bg-slate-50 text-slate-800 text-sm rounded-xl border transition ${errors.password
+                    ? 'border-rose-300 focus:ring-2 focus:ring-rose-400/20 focus:border-rose-500 bg-rose-50/20'
+                    : 'border-slate-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600'
+                    }`}
                 />
                 <button
                   type="button"
@@ -192,11 +221,10 @@ export const LoginPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isLoading || isSuccess}
-                className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white transition-all shadow-md ${
-                  isSuccess
-                    ? 'bg-emerald-600 shadow-emerald-500/20'
-                    : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 shadow-blue-500/20'
-                } disabled:opacity-75 disabled:cursor-not-allowed`}
+                className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white transition-all shadow-md ${isSuccess
+                  ? 'bg-emerald-600 shadow-emerald-500/20'
+                  : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 shadow-blue-500/20'
+                  } disabled:opacity-75 disabled:cursor-not-allowed`}
               >
                 {isLoading ? (
                   <>
@@ -215,6 +243,19 @@ export const LoginPage: React.FC = () => {
                   </>
                 )}
               </button>
+            </div>
+
+            {/* Registration Link */}
+            <div className="text-center pt-2">
+              <p className="text-xs text-slate-600">
+                Don't have an account?{' '}
+                <Link
+                  to="/register"
+                  className="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Register
+                </Link>
+              </p>
             </div>
           </form>
 
@@ -244,18 +285,16 @@ export const LoginPage: React.FC = () => {
                 <div
                   key={account.role}
                   onClick={() => handleDemoClick(account)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer group ${
-                    isSelected
-                      ? 'bg-blue-50/80 border-blue-300 ring-1 ring-blue-400/30'
-                      : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
-                  }`}
+                  className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer group ${isSelected
+                    ? 'bg-blue-50/80 border-blue-300 ring-1 ring-blue-400/30'
+                    : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                    }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition ${
-                      isSelected
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-slate-100 text-slate-700 group-hover:bg-blue-100 group-hover:text-blue-700'
-                    }`}>
+                    <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition ${isSelected
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-slate-100 text-slate-700 group-hover:bg-blue-100 group-hover:text-blue-700'
+                      }`}>
                       {account.badge}
                     </span>
                     <div className="min-w-0">

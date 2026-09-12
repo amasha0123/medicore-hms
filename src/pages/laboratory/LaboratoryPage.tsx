@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FlaskConical, Plus, Printer, CheckCircle, Clock, AlertTriangle, FileText } from 'lucide-react';
 import { labService } from '../../services/labService';
 import { patientService } from '../../services/patientService';
@@ -14,14 +14,35 @@ import { formatDate } from '../../utils/formatters';
 
 export const LaboratoryPage: React.FC = () => {
   const { showToast } = useToast();
-  const [tests, setTests] = useState<LaboratoryTest[]>(() => labService.getAll());
+  const [tests, setTests] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [requestModalOpen, setRequestModalOpen] = useState(false);
-  const [resultModalTest, setResultModalTest] = useState<LaboratoryTest | null>(null);
-  const [printTest, setPrintTest] = useState<LaboratoryTest | null>(null);
+  const [resultModalTest, setResultModalTest] = useState<any | null>(null);
+  const [printTest, setPrintTest] = useState<any | null>(null);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'Requested' | 'Sample Collected' | 'Processing' | 'Completed'>('ALL');
 
-  const patients = patientService.getAll();
-  const doctors = doctorService.getAll();
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [t, pats, docs] = await Promise.all([
+          labService.getAll(),
+          patientService.getAll(),
+          doctorService.getAll()
+        ]);
+        setTests(t);
+        setPatients(pats);
+        setDoctors(docs);
+      } catch (err: any) {
+        showToast('error', 'Load failed', err?.message ?? 'Could not load lab data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const [requestForm, setRequestForm] = useState({
     patientId: patients[0]?.id || '',
@@ -42,59 +63,71 @@ export const LaboratoryPage: React.FC = () => {
     remarks: ''
   });
 
-  const handleOrderTest = (e: React.FormEvent) => {
+  const handleOrderTest = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pat = patients.find(p => p.id === requestForm.patientId);
-    const doc = doctors.find(d => d.id === requestForm.doctorId);
+    const pat = patients.find((p: any) => p.id === requestForm.patientId);
+    const doc = doctors.find((d: any) => d.id === requestForm.doctorId);
     if (!pat || !doc) return;
 
-    const created = labService.createRequest({
-      patientId: pat.id,
-      patientName: pat.fullName,
-      patientAge: pat.age,
-      patientGender: pat.gender,
-      doctorId: doc.id,
-      doctorName: doc.name,
-      testName: requestForm.testName,
-      category: requestForm.category,
-      requestedDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
-      priority: requestForm.priority,
-      sampleType: requestForm.sampleType,
-      technicianNotes: requestForm.technicianNotes
-    });
+    try {
+      const created = await labService.createRequest({
+        patientId: pat.id,
+        patientName: pat.fullName,
+        patientAge: pat.age,
+        patientGender: pat.gender,
+        doctorId: doc.id,
+        doctorName: doc.name,
+        testName: requestForm.testName,
+        category: requestForm.category,
+        requestedDate: new Date().toISOString().replace('T', ' ').substring(0, 16),
+        priority: requestForm.priority,
+        sampleType: requestForm.sampleType,
+        technicianNotes: requestForm.technicianNotes
+      });
 
-    setTests(labService.getAll());
-    setRequestModalOpen(false);
-    showToast('success', 'Lab Test Requested', `Test ID ${created.testCode} created`);
+      setTests(await labService.getAll());
+      setRequestModalOpen(false);
+      showToast('success', 'Lab Test Requested', `Test ID ${created.testCode} created`);
+    } catch (err: any) {
+      showToast('error', 'Request failed', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleStatusUpdate = (id: string, status: SampleStatus) => {
-    labService.updateStatus(id, status);
-    setTests(labService.getAll());
-    showToast('info', 'Status Updated', `Sample status set to ${status}`);
+  const handleStatusUpdate = async (id: string, status: SampleStatus) => {
+    try {
+      await labService.updateStatus(id, status);
+      setTests(await labService.getAll());
+      showToast('info', 'Status Updated', `Sample status set to ${status}`);
+    } catch (err: any) {
+      showToast('error', 'Update failed', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleSaveResult = (e: React.FormEvent) => {
+  const handleSaveResult = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resultModalTest) return;
 
-    labService.enterResults(
-      resultModalTest.id,
-      [
-        {
-          parameter: resultParam.paramName,
-          value: resultParam.val,
-          unit: resultParam.unit,
-          referenceRange: resultParam.refRange,
-          isAbnormal: resultParam.isAbnormal
-        }
-      ],
-      resultParam.remarks || 'Diagnostics verified according to laboratory standards.'
-    );
+    try {
+      await labService.enterResults({
+        labRequestId: resultModalTest.id,
+        results: [
+          {
+            parameter: resultParam.paramName,
+            value: resultParam.val,
+            unit: resultParam.unit,
+            referenceRange: resultParam.refRange,
+            isAbnormal: resultParam.isAbnormal
+          }
+        ],
+        pathologistRemarks: resultParam.remarks || 'Diagnostics verified according to laboratory standards.'
+      });
 
-    setTests(labService.getAll());
-    setResultModalTest(null);
-    showToast('success', 'Lab Results Recorded', 'The findings have been archived and patient chart updated.');
+      setTests(await labService.getAll());
+      setResultModalTest(null);
+      showToast('success', 'Lab Results Recorded', 'The findings have been archived and patient chart updated.');
+    } catch (err: any) {
+      showToast('error', 'Save failed', err?.message ?? 'Unknown error');
+    }
   };
 
   const filteredTests = tests.filter(t => activeFilter === 'ALL' || t.sampleStatus === activeFilter);

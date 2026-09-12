@@ -1,49 +1,102 @@
-/**
- * MediCore HMS — Central API Client
+﻿/**
+ * MediCore HMS - Central API Client
  *
- * Thin HTTP client that wraps fetch with:
- *  - Base URL from VITE_API_URL env var (falls back to mock mode)
- *  - Automatic JWT Bearer token injection from localStorage / sessionStorage
- *  - Centralised error handling with typed ApiError
- *  - Token refresh on 401 responses
+ * Real backend API client.
+ *
+ * Frontend:
+ *   http://localhost:5173
+ *
+ * Backend:
+ *   http://localhost:5000
+ *
+ * API:
+ *   http://localhost:5000/api/v1
  */
 
-const BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_SERVER =
+  import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-/** When VITE_API_URL is empty the app falls back to localStorage (demo) mode */
-export const IS_MOCK_MODE = !import.meta.env.VITE_API_URL;
+const BASE_URL = API_SERVER.replace(/\/+$/, '');
+
+export const IS_MOCK_MODE = false;
 
 const TOKEN_KEY = 'medicore_jwt_token';
 const REFRESH_KEY = 'medicore_refresh_token';
 
-// ─── Token Helpers ────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Token Helpers
+// -----------------------------------------------------------------------------
 
 export function getAccessToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY) || sessionStorage.getItem(TOKEN_KEY);
+  return (
+    localStorage.getItem(TOKEN_KEY) ||
+    sessionStorage.getItem(TOKEN_KEY)
+  );
 }
 
 export function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_KEY) || sessionStorage.getItem(REFRESH_KEY);
+  return (
+    localStorage.getItem(REFRESH_KEY) ||
+    sessionStorage.getItem(REFRESH_KEY)
+  );
 }
 
 export function setTokens(
   accessToken: string,
   refreshToken: string,
-  persistent: boolean
+  persistent = true
 ): void {
-  const store = persistent ? localStorage : sessionStorage;
+  console.log('[MediCore Auth] setTokens called');
+  console.log(
+    '[MediCore Auth] access token received:',
+    !!accessToken
+  );
+  console.log(
+    '[MediCore Auth] refresh token received:',
+    !!refreshToken
+  );
+  console.log(
+    '[MediCore Auth] persistent:',
+    persistent
+  );
+
+  if (!accessToken) {
+    throw new Error(
+      'Login failed: accessToken was not returned by the backend.'
+    );
+  }
+
+  if (!refreshToken) {
+    throw new Error(
+      'Login failed: refreshToken was not returned by the backend.'
+    );
+  }
+
+  const store = persistent
+    ? localStorage
+    : sessionStorage;
+
+  const otherStore = persistent
+    ? sessionStorage
+    : localStorage;
+
+  // Remove stale tokens first.
+  otherStore.removeItem(TOKEN_KEY);
+  otherStore.removeItem(REFRESH_KEY);
+
+  // Store the new tokens.
   store.setItem(TOKEN_KEY, accessToken);
   store.setItem(REFRESH_KEY, refreshToken);
+
+  console.log(
+    '[MediCore Auth] token stored successfully:',
+    !!store.getItem(TOKEN_KEY)
+  );
 }
 
-export function clearTokens(): void {
-  [localStorage, sessionStorage].forEach((s) => {
-    s.removeItem(TOKEN_KEY);
-    s.removeItem(REFRESH_KEY);
-  });
-}
-
-// ─── API Error ────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// API Error
+// -----------------------------------------------------------------------------
 
 export interface ApiFieldError {
   field: string;
@@ -51,44 +104,135 @@ export interface ApiFieldError {
 }
 
 export class ApiError extends Error {
-  statusCode: number;
-  errors?: ApiFieldError[];
+  public statusCode: number;
+  public errors?: ApiFieldError[];
 
-  constructor(message: string, statusCode: number, errors?: ApiFieldError[]) {
+  constructor(
+    message: string,
+    statusCode: number,
+    errors?: ApiFieldError[]
+  ) {
     super(message);
+
     this.name = 'ApiError';
     this.statusCode = statusCode;
     this.errors = errors;
+
+    Object.setPrototypeOf(this, ApiError.prototype);
   }
 }
 
-// ─── Core Fetch ───────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Token Refresh
+// -----------------------------------------------------------------------------
 
 let isRefreshing = false;
-let refreshQueue: Array<(token: string) => void> = [];
+
+let refreshQueue: Array<{
+  resolve: (token: string) => void;
+  reject: (error: unknown) => void;
+}> = [];
 
 async function attemptTokenRefresh(): Promise<string> {
   const refreshToken = getRefreshToken();
-  if (!refreshToken) throw new ApiError('Session expired. Please log in again.', 401);
 
-  const res = await fetch(`${BASE_URL}/api/v1/auth/refresh`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refreshToken }),
-  });
-
-  if (!res.ok) {
+  if (!refreshToken) {
     clearTokens();
-    window.dispatchEvent(new Event('medicore:session-expired'));
-    throw new ApiError('Session expired. Please log in again.', 401);
+
+    window.dispatchEvent(
+      new Event('medicore:session-expired')
+    );
+
+    throw new ApiError(
+      'Session expired. Please log in again.',
+      401
+    );
   }
 
-  const json = await res.json();
-  const { accessToken, refreshToken: newRefresh } = json.data;
-  const persistent = !!localStorage.getItem(TOKEN_KEY);
-  setTokens(accessToken, newRefresh, persistent);
+  const response = await fetch(
+    `${BASE_URL}/api/v1/auth/refresh`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        refreshToken,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    clearTokens();
+
+    window.dispatchEvent(
+      new Event('medicore:session-expired')
+    );
+
+    throw new ApiError(
+      'Session expired. Please log in again.',
+      401
+    );
+  }
+
+  let json: any;
+
+  try {
+    json = await response.json();
+  } catch {
+    clearTokens();
+
+    throw new ApiError(
+      'Invalid token refresh response.',
+      401
+    );
+  }
+
+  const accessToken = json?.data?.accessToken;
+  const newRefreshToken =
+    json?.data?.refreshToken;
+
+  if (!accessToken || !newRefreshToken) {
+    clearTokens();
+
+    throw new ApiError(
+      'Invalid token refresh response.',
+      401
+    );
+  }
+
+  const persistent =
+    !!localStorage.getItem(TOKEN_KEY);
+
+  setTokens(
+    accessToken,
+    newRefreshToken,
+    persistent
+  );
+
   return accessToken;
 }
+
+// -----------------------------------------------------------------------------
+// Build URL
+// -----------------------------------------------------------------------------
+
+function buildUrl(path: string): string {
+  // If a complete URL is supplied, use it directly.
+  if (/^https?:\/\//i.test(path)) {
+    return path;
+  }
+
+  const normalizedPath = path.startsWith('/')
+    ? path
+    : `/${path}`;
+
+  return `${BASE_URL}${normalizedPath}`;
+}
+
+// -----------------------------------------------------------------------------
+// Core Request
+// -----------------------------------------------------------------------------
 
 async function request<T>(
   path: string,
@@ -96,92 +240,222 @@ async function request<T>(
   retried = false
 ): Promise<T> {
   const token = getAccessToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
 
-  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const headers = new Headers(
+    options.headers || {}
+  );
 
-  // Remove Content-Type for FormData so browser sets multipart boundary
-  if (options.body instanceof FormData) {
-    delete headers['Content-Type'];
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
   }
 
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
+  // Do not manually set Content-Type for FormData.
+  if (!(options.body instanceof FormData)) {
+    if (!headers.has('Content-Type')) {
+      headers.set(
+        'Content-Type',
+        'application/json'
+      );
+    }
+  }
 
-  // Handle 401 — try refresh once
-  if (res.status === 401 && !retried) {
+  if (token) {
+    headers.set(
+      'Authorization',
+      `Bearer ${token}`
+    );
+  }
+
+  const url = buildUrl(path);
+
+  console.log(
+    `[MediCore API] ${options.method || 'GET'} ${url}`
+  );
+
+  const response = await fetch(
+    url,
+    {
+      ...options,
+      headers,
+    }
+  );
+
+  // ---------------------------------------------------------------------------
+  // Handle 401 - Refresh token once
+  // ---------------------------------------------------------------------------
+
+  if (
+    response.status === 401 &&
+    !retried
+  ) {
     if (isRefreshing) {
-      // Queue this call until refresh completes
-      return new Promise((resolve, reject) => {
-        refreshQueue.push(async (newToken) => {
-          try {
-            resolve(
-              await request<T>(path, {
-                ...options,
-                headers: { ...headers, Authorization: `Bearer ${newToken}` },
-              }, true)
-            );
-          } catch (e) {
-            reject(e);
-          }
-        });
-      });
+      return new Promise<T>(
+        (resolve, reject) => {
+          refreshQueue.push({
+            resolve: async (newToken) => {
+              try {
+                const result =
+                  await request<T>(
+                    path,
+                    {
+                      ...options,
+                      headers: {
+                        ...Object.fromEntries(
+                          headers.entries()
+                        ),
+                        Authorization:
+                          `Bearer ${newToken}`,
+                      },
+                    },
+                    true
+                  );
+
+                resolve(result);
+              } catch (error) {
+                reject(error);
+              }
+            },
+            reject,
+          });
+        }
+      );
     }
 
     isRefreshing = true;
+
     try {
-      const newToken = await attemptTokenRefresh();
-      refreshQueue.forEach((cb) => cb(newToken));
+      const newToken =
+        await attemptTokenRefresh();
+
+      const queuedRequests =
+        [...refreshQueue];
+
+      refreshQueue = [];
+
+      queuedRequests.forEach(
+        ({ resolve }) => {
+          resolve(newToken);
+        }
+      );
+
+      isRefreshing = false;
+
+      return request<T>(
+        path,
+        options,
+        true
+      );
+    } catch (error) {
+      const queuedRequests =
+        [...refreshQueue];
+
       refreshQueue = [];
       isRefreshing = false;
-      return request<T>(path, options, true);
-    } catch (err) {
-      isRefreshing = false;
-      refreshQueue = [];
-      throw err;
+
+      queuedRequests.forEach(
+        ({ reject }) => {
+          reject(error);
+        }
+      );
+
+      throw error;
     }
   }
 
-  if (!res.ok) {
-    let body: { message?: string; errors?: ApiFieldError[] } = {};
+  // ---------------------------------------------------------------------------
+  // Handle API Errors
+  // ---------------------------------------------------------------------------
+
+  if (!response.ok) {
+    let body: {
+      success?: boolean;
+      message?: string;
+      errors?: ApiFieldError[];
+    } = {};
+
     try {
-      body = await res.json();
+      body = await response.json();
     } catch {
-      // ignore JSON parse failure
+      // Response was not JSON.
     }
-    throw new ApiError(body.message || `HTTP ${res.status}`, res.status, body.errors);
+
+    throw new ApiError(
+      body.message ||
+      `HTTP ${response.status}`,
+      response.status,
+      body.errors
+    );
   }
 
+  // ---------------------------------------------------------------------------
   // 204 No Content
-  if (res.status === 204) return undefined as T;
+  // ---------------------------------------------------------------------------
 
-  return res.json().then((j) => j.data ?? j);
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Parse response
+  // ---------------------------------------------------------------------------
+
+  const json = await response.json();
+
+  return json?.data ?? json;
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
 
 export const apiClient = {
-  get: <T>(path: string) => request<T>(path, { method: 'GET' }),
+  get: <T>(path: string): Promise<T> =>
+    request<T>(path, {
+      method: 'GET',
+    }),
 
-  post: <T>(path: string, body?: unknown) =>
+  post: <T>(
+    path: string,
+    body?: unknown
+  ): Promise<T> =>
     request<T>(path, {
       method: 'POST',
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body:
+        body instanceof FormData
+          ? body
+          : JSON.stringify(body ?? {}),
     }),
 
-  put: <T>(path: string, body?: unknown) =>
+  put: <T>(
+    path: string,
+    body?: unknown
+  ): Promise<T> =>
     request<T>(path, {
       method: 'PUT',
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body:
+        body instanceof FormData
+          ? body
+          : JSON.stringify(body ?? {}),
     }),
 
-  patch: <T>(path: string, body?: unknown) =>
+  patch: <T>(
+    path: string,
+    body?: unknown
+  ): Promise<T> =>
     request<T>(path, {
       method: 'PATCH',
-      body: body instanceof FormData ? body : JSON.stringify(body),
+      body:
+        body instanceof FormData
+          ? body
+          : JSON.stringify(body ?? {}),
     }),
 
-  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  delete: <T>(path: string): Promise<T> =>
+    request<T>(path, {
+      method: 'DELETE',
+    }),
 };
+export function clearTokens() {
+  throw new Error("Function not implemented.");
+}
+

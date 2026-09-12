@@ -1,15 +1,27 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { staffService } from '../../services/staffService';
 import { StatusBadge } from '../../components/common/StatusBadge';
 
 export const AttendancePage: React.FC = () => {
-  const attendance = staffService.getAttendance();
+  const [attendance, setAttendance] = useState<any[]>([]);
   const [selectedDept, setSelectedDept] = useState('ALL');
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await staffService.getAttendance();
+        setAttendance(data || []);
+      } catch {
+        setAttendance([]);
+      }
+    };
+    load();
+  }, []);
 
   const depts = ['ALL', 'Hospital Administration', 'Cardiology', 'Inpatient Care', 'Front Desk', 'Diagnostic Laboratory', 'Central Pharmacy', 'Finance & Billing', 'ICU & Emergency'];
 
-  const filtered = attendance.filter(a => selectedDept === 'ALL' || a.department === selectedDept);
+  const filtered = attendance.filter((a: any) => selectedDept === 'ALL' || a.department === selectedDept);
 
   return (
     <div className="space-y-4">

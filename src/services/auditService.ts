@@ -1,41 +1,58 @@
 
-import { AuditLog, AuditAction, AuditModule } from '../types/audit';
-import { UserRole } from '../types/auth';
-import { INITIAL_AUDIT_LOGS } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
+import { apiClient, IS_MOCK_MODE } from './apiClient';
 
-const AUDIT_KEY = 'medicore_audit_logs';
+export interface AuditLogParams {
+  userId?: string;
+  userName?: string;
+  userRole?: string;
+  action: string;
+  module: string;
+  recordIdentifier: string;
+  details?: string;
+  status?: 'SUCCESS' | 'WARNING' | 'FAILED';
+}
+
+// In-memory log for mock mode
+const mockLogs: AuditLogParams[] = [];
 
 export const auditService = {
-  getAll(): AuditLog[] {
-    return getStoredItem<AuditLog[]>(AUDIT_KEY, INITIAL_AUDIT_LOGS);
+  /**
+   * Log an audit event.
+   * - In MOCK MODE: stores in-memory only (no network call).
+   * - In REAL API MODE: fires a best-effort POST to the backend.
+   *   Never throws — audit logging should never break the UI.
+   */
+  log(params: AuditLogParams): void {
+    if (IS_MOCK_MODE) {
+      mockLogs.unshift(params);
+      return;
+    }
+    // Fire-and-forget: don't await, don't block the caller
+    apiClient
+      .post('/api/v1/audit-logs', {
+        userId: params.userId,
+        userName: params.userName,
+        userRole: params.userRole,
+        action: params.action,
+        module: params.module,
+        recordIdentifier: params.recordIdentifier,
+        description: params.details,
+        status: params.status ?? 'SUCCESS'
+      })
+      .catch(() => {
+        // Silently ignore — audit log failure must never crash the app
+      });
   },
 
-  log(params: {
-    userId: string;
-    userName: string;
-    userRole: UserRole;
-    action: AuditAction;
-    module: AuditModule;
-    recordIdentifier: string;
-    details: string;
-    status?: 'SUCCESS' | 'WARNING' | 'FAILED';
-  }): void {
-    const logs = this.getAll();
-    const newLog: AuditLog = {
-      id: `aud-${Date.now().toString(36)}-${Math.random().toString(36).substring(7)}`,
-      timestamp: new Date().toISOString().replace('T', ' ').substring(0, 19),
-      userId: params.userId,
-      userName: params.userName,
-      userRole: params.userRole,
-      action: params.action,
-      module: params.module,
-      recordIdentifier: params.recordIdentifier,
-      details: params.details,
-      ipAddress: '192.168.1.104',
-      device: 'Hospital Workstation WS-01',
-      status: params.status || 'SUCCESS'
-    };
-    setStoredItem(AUDIT_KEY, [newLog, ...logs]);
+  /**
+   * Fetch all audit logs from the backend (paginated).
+   */
+  async getAll(params?: Record<string, string>): Promise<any[]> {
+    if (IS_MOCK_MODE) {
+      return mockLogs as any[];
+    }
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/audit-logs${query}`);
+    return Array.isArray(res) ? res : (res?.logs ?? res ?? []);
   }
 };

@@ -1,9 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Eye, Trash2, Calendar, FileSpreadsheet, UserCheck, Phone } from 'lucide-react';
+import { Plus, Eye, Trash2 } from 'lucide-react';
 import { patientService } from '../../services/patientService';
-import { Patient } from '../../types/patient';
 import { DataTable, Column } from '../../components/common/DataTable';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { ConfirmationDialog } from '../../components/common/ConfirmationDialog';
@@ -13,19 +12,38 @@ import { formatDate } from '../../utils/formatters';
 export const PatientListPage: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [patients, setPatients] = useState<Patient[]>(() => patientService.getAll());
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [deletePatientId, setDeletePatientId] = useState<string | null>(null);
 
-  const handleDelete = () => {
-    if (deletePatientId) {
-      patientService.delete(deletePatientId);
-      setPatients(patientService.getAll());
-      showToast('success', 'Patient record deleted', 'The patient archive has been updated.');
-      setDeletePatientId(null);
+  const loadPatients = async () => {
+    try {
+      setLoading(true);
+      const data = await patientService.getAll();
+      setPatients(data);
+    } catch (err: any) {
+      showToast('error', 'Failed to load patients', err?.message ?? 'Unknown error');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const columns: Column<Patient>[] = [
+  useEffect(() => { loadPatients(); }, []);
+
+  const handleDelete = async () => {
+    if (deletePatientId) {
+      try {
+        await patientService.delete(deletePatientId);
+        showToast('success', 'Patient record deleted', 'The patient archive has been updated.');
+        setDeletePatientId(null);
+        await loadPatients();
+      } catch (err: any) {
+        showToast('error', 'Delete failed', err?.message ?? 'Unknown error');
+      }
+    }
+  };
+
+  const columns: Column<any>[] = [
     {
       key: 'patientNumber',
       header: 'Patient ID',
@@ -122,37 +140,41 @@ export const PatientListPage: React.FC = () => {
         </button>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={patients}
-        searchPlaceholder="Search by name, ID, phone number or NIC..."
-        searchKeys={['fullName', 'patientNumber', 'phone', 'nationalId', 'primaryDepartment']}
-        filterOptions={[
-          {
-            label: 'Blood Groups',
-            key: 'bloodGroup',
-            options: [
-              { label: 'A+', value: 'A+' },
-              { label: 'A-', value: 'A-' },
-              { label: 'B+', value: 'B+' },
-              { label: 'B-', value: 'B-' },
-              { label: 'O+', value: 'O+' },
-              { label: 'O-', value: 'O-' },
-              { label: 'AB+', value: 'AB+' },
-              { label: 'AB-', value: 'AB-' },
-            ]
-          },
-          {
-            label: 'Status',
-            key: 'status',
-            options: [
-              { label: 'Active', value: 'Active' },
-              { label: 'Inpatient', value: 'Inpatient' },
-              { label: 'Discharged', value: 'Discharged' },
-            ]
-          }
-        ]}
-      />
+      {loading ? (
+        <div className="flex items-center justify-center h-40 text-slate-400">Loading patients...</div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={patients}
+          searchPlaceholder="Search by name, ID, phone number or NIC..."
+          searchKeys={['fullName', 'patientNumber', 'phone', 'nationalId', 'primaryDepartment']}
+          filterOptions={[
+            {
+              label: 'Blood Groups',
+              key: 'bloodGroup',
+              options: [
+                { label: 'A+', value: 'A+' },
+                { label: 'A-', value: 'A-' },
+                { label: 'B+', value: 'B+' },
+                { label: 'B-', value: 'B-' },
+                { label: 'O+', value: 'O+' },
+                { label: 'O-', value: 'O-' },
+                { label: 'AB+', value: 'AB+' },
+                { label: 'AB-', value: 'AB-' },
+              ]
+            },
+            {
+              label: 'Status',
+              key: 'status',
+              options: [
+                { label: 'Active', value: 'Active' },
+                { label: 'Inpatient', value: 'Inpatient' },
+                { label: 'Discharged', value: 'Discharged' },
+              ]
+            }
+          ]}
+        />
+      )}
 
       <ConfirmationDialog
         isOpen={!!deletePatientId}

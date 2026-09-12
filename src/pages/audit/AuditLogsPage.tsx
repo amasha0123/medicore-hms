@@ -1,15 +1,32 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ShieldAlert, Search, Filter } from 'lucide-react';
 import { auditService } from '../../services/auditService';
 import { AuditLog, AuditModule } from '../../types/audit';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { useToast } from '../../context/ToastContext';
 import { DataTable, Column } from '../../components/common/DataTable';
 
 export const AuditLogsPage: React.FC = () => {
-  const [logs] = useState<AuditLog[]>(() => auditService.getAll());
+  const { showToast } = useToast();
+  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(true);
 
-  const columns: Column<AuditLog>[] = [
+  useEffect(() => {
+  async function fetchLogs() {
+    try {
+      const data = await auditService.getAll();
+      setLogs(data);
+    } catch (err: any) {
+      showToast('error', 'Failed to load audit logs', err?.message ?? 'Unknown error');
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+  fetchLogs();
+}, []);
+
+const columns: Column<AuditLog>[] = [
     {
       key: 'timestamp',
       header: 'Timestamp',
@@ -77,29 +94,35 @@ export const AuditLogsPage: React.FC = () => {
         <p className="text-sm text-slate-500 mt-1">Immutable security compliance log tracking every clinical, financial, and authentication event.</p>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={logs}
-        searchPlaceholder="Filter audit records by user, action, module, or details..."
-        searchKeys={['userName', 'action', 'module', 'recordIdentifier', 'details']}
-        filterOptions={[
-          {
-            label: 'Module',
-            key: 'module',
-            options: [
-              { label: 'AUTH', value: 'AUTH' },
-              { label: 'PATIENT', value: 'PATIENT' },
-              { label: 'APPOINTMENT', value: 'APPOINTMENT' },
-              { label: 'EMR', value: 'EMR' },
-              { label: 'LABORATORY', value: 'LABORATORY' },
-              { label: 'PHARMACY', value: 'PHARMACY' },
-              { label: 'BILLING', value: 'BILLING' },
-              { label: 'ADMISSIONS', value: 'ADMISSIONS' },
-              { label: 'SETTINGS', value: 'SETTINGS' },
-            ]
-          }
-        ]}
-      />
+{loadingLogs ? (
+  <div className="flex items-center justify-center h-40 text-slate-400">
+    Loading audit logs...
+  </div>
+) : (
+  <DataTable
+    columns={columns}
+    data={logs}
+    searchPlaceholder="Filter audit records by user, action, module, or details..."
+    searchKeys={['userName', 'action', 'module', 'recordIdentifier', 'details']}
+    filterOptions={[
+      {
+        label: 'Module',
+        key: 'module',
+        options: [
+          { label: 'AUTH', value: 'AUTH' },
+          { label: 'PATIENT', value: 'PATIENT' },
+          { label: 'APPOINTMENT', value: 'APPOINTMENT' },
+          { label: 'EMR', value: 'EMR' },
+          { label: 'LABORATORY', value: 'LABORATORY' },
+          { label: 'PHARMACY', value: 'PHARMACY' },
+          { label: 'BILLING', value: 'BILLING' },
+          { label: 'ADMISSIONS', value: 'ADMISSIONS' },
+          { label: 'SETTINGS', value: 'SETTINGS' },
+        ],
+      },
+    ]}
+  />
+)}
     </div>
   );
 };

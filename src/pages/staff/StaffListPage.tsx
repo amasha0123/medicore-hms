@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { staffService } from '../../services/staffService';
 import { StaffMember } from '../../types/staff';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -11,7 +11,19 @@ import { Users, CalendarCheck, CalendarDays } from 'lucide-react';
 
 export const StaffListPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState('directory');
-  const staff = staffService.getAllStaff();
+  const [staff, setStaff] = useState<any[]>([]);
+
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await staffService.getAllStaff();
+        setStaff(data || []);
+      } catch {
+        setStaff([]);
+      }
+    };
+    load();
+  }, []);
 
   const tabs = [
     { id: 'directory', label: 'Employee Directory', badge: staff.length, icon: <Users className="w-4 h-4" /> },
@@ -44,7 +56,7 @@ export const StaffListPage: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {staff.map(emp => (
+              {staff.map((emp: any) => (
                 <tr key={emp.id} className="hover:bg-slate-50">
                   <td className="py-3 px-4 font-mono font-semibold text-blue-600">{emp.employeeId}</td>
                   <td className="py-3 px-4">

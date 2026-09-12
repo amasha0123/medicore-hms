@@ -1,91 +1,31 @@
 
-import { Patient } from '../types/patient';
-import { INITIAL_PATIENTS } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
-import { auditService } from './auditService';
-
-const PATIENTS_KEY = 'medicore_patients';
+import { apiClient } from './apiClient';
 
 export const patientService = {
-  getAll(): Patient[] {
-    return getStoredItem<Patient[]>(PATIENTS_KEY, INITIAL_PATIENTS);
+  async getAll(params?: Record<string, string>): Promise<any> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/patients${query}`);
+    // Backend returns { patients, pagination } wrapped in data
+    return Array.isArray(res) ? res : (res?.patients ?? res ?? []);
   },
 
-  getById(id: string): Patient | undefined {
-    const patients = this.getAll();
-    return patients.find(p => p.id === id || p.patientNumber.toLowerCase() === id.toLowerCase());
+  async getById(id: string): Promise<any> {
+    return apiClient.get<any>(`/api/v1/patients/${id}`);
   },
 
-  create(patientData: Omit<Patient, 'id' | 'patientNumber' | 'registeredDate'>): Patient {
-    const patients = this.getAll();
-    const nextNum = 1000 + patients.length + 1;
-    const newPatient: Patient = {
-      ...patientData,
-      id: `p-${nextNum}`,
-      patientNumber: `P-${nextNum}`,
-      registeredDate: new Date().toISOString().split('T')[0],
-      lastVisit: new Date().toISOString().split('T')[0]
-    };
-    const updated = [newPatient, ...patients];
-    setStoredItem(PATIENTS_KEY, updated);
-
-    auditService.log({
-      userId: 'staff',
-      userName: 'Hospital Staff',
-      userRole: 'RECEPTIONIST',
-      action: 'CREATE',
-      module: 'PATIENT',
-      recordIdentifier: newPatient.patientNumber,
-      details: `Registered new patient ${newPatient.fullName}`
-    });
-
-    return newPatient;
+  async create(patientData: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/patients', patientData);
   },
 
-  update(id: string, updates: Partial<Patient>): Patient {
-    const patients = this.getAll();
-    let updated: Patient | null = null;
-    const next = patients.map(p => {
-      if (p.id === id) {
-        updated = { ...p, ...updates };
-        return updated;
-      }
-      return p;
-    });
-    setStoredItem(PATIENTS_KEY, next);
-
-    if (updated) {
-      auditService.log({
-        userId: 'staff',
-        userName: 'Clinical Staff',
-        userRole: 'DOCTOR',
-        action: 'UPDATE',
-        module: 'PATIENT',
-        recordIdentifier: (updated as Patient).patientNumber,
-        details: `Updated clinical details for patient ${(updated as Patient).fullName}`
-      });
-    }
-
-    return updated!;
+  async update(id: string, updates: any): Promise<any> {
+    return apiClient.put<any>(`/api/v1/patients/${id}`, updates);
   },
 
-  delete(id: string): void {
-    const patients = this.getAll();
-    const target = patients.find(p => p.id === id);
-    const next = patients.filter(p => p.id !== id);
-    setStoredItem(PATIENTS_KEY, next);
+  async delete(id: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/patients/${id}`);
+  },
 
-    if (target) {
-      auditService.log({
-        userId: 'admin',
-        userName: 'Administrator',
-        userRole: 'ADMIN',
-        action: 'DELETE',
-        module: 'PATIENT',
-        recordIdentifier: target.patientNumber,
-        details: `Removed patient record for ${target.fullName}`,
-        status: 'WARNING'
-      });
-    }
+  async getMedicalHistory(id: string): Promise<any> {
+    return apiClient.get<any>(`/api/v1/patients/${id}/medical-history`);
   }
 };

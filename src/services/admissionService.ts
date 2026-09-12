@@ -1,103 +1,33 @@
 
-import { Bed, AdmissionRecord, BedStatus } from '../types/admission';
-import { INITIAL_BEDS, INITIAL_ADMISSIONS } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
-import { auditService } from './auditService';
-
-const BEDS_KEY = 'medicore_beds';
-const ADMISSIONS_KEY = 'medicore_admissions';
+import { apiClient } from './apiClient';
 
 export const admissionService = {
-  getBeds(): Bed[] {
-    return getStoredItem<Bed[]>(BEDS_KEY, INITIAL_BEDS);
+  async getBeds(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/admissions/beds${query}`);
+    return Array.isArray(res) ? res : (res?.beds ?? res ?? []);
   },
 
-  getAdmissions(): AdmissionRecord[] {
-    return getStoredItem<AdmissionRecord[]>(ADMISSIONS_KEY, INITIAL_ADMISSIONS);
+  async getWards(): Promise<any[]> {
+    const res = await apiClient.get<any>('/api/v1/admissions/wards');
+    return Array.isArray(res) ? res : (res?.wards ?? res ?? []);
   },
 
-  admitPatient(data: Omit<AdmissionRecord, 'id' | 'admissionNumber' | 'status'>): AdmissionRecord {
-    const admissions = this.getAdmissions();
-    const beds = this.getBeds();
-
-    const newAdmission: AdmissionRecord = {
-      ...data,
-      id: `adm-${Date.now().toString(36)}`,
-      admissionNumber: `ADM-2026-0${30 + admissions.length + 1}`,
-      status: 'Admitted'
-    };
-
-    // Update bed to Occupied
-    const updatedBeds = beds.map(b => {
-      if (b.bedNumber === data.bedNumber) {
-        return {
-          ...b,
-          status: 'Occupied' as BedStatus,
-          currentPatientId: data.patientId,
-          currentPatientName: data.patientName,
-          admittedDate: data.admissionDate,
-          attendingDoctorName: data.attendingDoctorName
-        };
-      }
-      return b;
-    });
-
-    setStoredItem(BEDS_KEY, updatedBeds);
-    setStoredItem(ADMISSIONS_KEY, [newAdmission, ...admissions]);
-
-    auditService.log({
-      userId: 'nurse-01',
-      userName: 'Priya Patel, RN',
-      userRole: 'NURSE',
-      action: 'ADMIT',
-      module: 'ADMISSIONS',
-      recordIdentifier: newAdmission.admissionNumber,
-      details: `Admitted ${data.patientName} to Ward ${data.ward}, Bed ${data.bedNumber}`
-    });
-
-    return newAdmission;
+  async getAdmissions(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/admissions${query}`);
+    return Array.isArray(res) ? res : (res?.admissions ?? res ?? []);
   },
 
-  dischargePatient(admissionId: string, bedNumber: string): void {
-    const admissions = this.getAdmissions();
-    const beds = this.getBeds();
+  async admitPatient(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/admissions', data);
+  },
 
-    const updatedAdmissions = admissions.map(a => {
-      if (a.id === admissionId) {
-        return {
-          ...a,
-          status: 'Discharged' as AdmissionRecord['status'],
-          actualDischargeDate: new Date().toISOString().replace('T', ' ').substring(0, 16)
-        };
-      }
-      return a;
-    });
+  async dischargePatient(admissionId: string, data?: any): Promise<any> {
+    return apiClient.patch<any>(`/api/v1/admissions/${admissionId}/discharge`, data ?? {});
+  },
 
-    const updatedBeds = beds.map(b => {
-      if (b.bedNumber === bedNumber) {
-        return {
-          ...b,
-          status: 'Available' as BedStatus,
-          currentPatientId: undefined,
-          currentPatientName: undefined,
-          admittedDate: undefined,
-          attendingDoctorName: undefined
-        };
-      }
-      return b;
-    });
-
-    setStoredItem(ADMISSIONS_KEY, updatedAdmissions);
-    setStoredItem(BEDS_KEY, updatedBeds);
-
-    auditService.log({
-      userId: 'doc-01',
-      userName: 'Dr. Michael Chen',
-      userRole: 'DOCTOR',
-      action: 'DISCHARGE',
-      module: 'ADMISSIONS',
-      recordIdentifier: admissionId,
-      details: `Discharged patient from bed ${bedNumber}`
-    });
+  async updateBedStatus(bedId: string, status: string): Promise<any> {
+    return apiClient.patch<any>(`/api/v1/admissions/beds/${bedId}/status`, { status });
   }
 };

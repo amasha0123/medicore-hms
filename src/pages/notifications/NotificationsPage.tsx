@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Bell, CheckCircle, AlertTriangle, AlertCircle, Info, Check, Trash2 } from 'lucide-react';
 import { notificationService } from '../../services/notificationService';
 import { Notification, NotificationPriority } from '../../types/notification';
@@ -8,18 +8,39 @@ import { useToast } from '../../context/ToastContext';
 
 export const NotificationsPage: React.FC = () => {
   const { showToast } = useToast();
-  const [notifications, setNotifications] = useState<Notification[]>(() => notificationService.getAll());
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<'ALL' | 'UNREAD' | 'CRITICAL'>('ALL');
 
-  const handleMarkAllRead = () => {
-    notificationService.markAllAsRead();
-    setNotifications(notificationService.getAll());
-    showToast('success', 'All marked as read', 'Your notifications inbox is up to date.');
+  const loadNotifications = async () => {
+    try {
+      const data = await notificationService.getAll();
+      setNotifications(data || []);
+    } catch {
+      setNotifications([]);
+    }
   };
 
-  const handleItemRead = (id: string) => {
-    notificationService.markAsRead(id);
-    setNotifications(notificationService.getAll());
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await notificationService.markAllAsRead();
+      await loadNotifications();
+      showToast('success', 'All marked as read', 'Your notifications inbox is up to date.');
+    } catch {
+      showToast('error', 'Error', 'Failed to mark all as read');
+    }
+  };
+
+  const handleItemRead = async (id: string) => {
+    try {
+      await notificationService.markAsRead(id);
+      await loadNotifications();
+    } catch {
+      // Ignored
+    }
   };
 
   const filtered = notifications.filter(n => {

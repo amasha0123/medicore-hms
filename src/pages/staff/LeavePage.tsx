@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { staffService } from '../../services/staffService';
 import { LeaveRequest } from '../../types/staff';
 import { StatusBadge } from '../../components/common/StatusBadge';
@@ -10,12 +10,29 @@ import { formatDate } from '../../utils/formatters';
 export const LeavePage: React.FC = () => {
   const { showToast } = useToast();
   const { currentUser } = useAuth();
-  const [leaves, setLeaves] = useState<LeaveRequest[]>(() => staffService.getLeaveRequests());
+  const [leaves, setLeaves] = useState<LeaveRequest[]>([]);
 
-  const handleAction = (id: string, status: 'Approved' | 'Rejected') => {
-    staffService.updateLeaveStatus(id, status, currentUser?.name || 'Administrator');
-    setLeaves(staffService.getLeaveRequests());
-    showToast(status === 'Approved' ? 'success' : 'warning', `Leave Request ${status}`, 'The employee schedule was updated.');
+  const loadLeaves = async () => {
+    try {
+      const data = await staffService.getLeaveRequests();
+      setLeaves(data || []);
+    } catch {
+      setLeaves([]);
+    }
+  };
+
+  useEffect(() => {
+    loadLeaves();
+  }, []);
+
+  const handleAction = async (id: string, status: 'Approved' | 'Rejected') => {
+    try {
+      await staffService.updateLeaveStatus(id, status, currentUser?.name || 'Administrator');
+      await loadLeaves();
+      showToast(status === 'Approved' ? 'success' : 'warning', `Leave Request ${status}`, 'The employee schedule was updated.');
+    } catch (err: any) {
+      showToast('error', 'Update Failed', err?.message ?? 'Could not update leave request');
+    }
   };
 
   return (

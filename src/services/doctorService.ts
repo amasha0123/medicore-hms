@@ -1,32 +1,36 @@
 
-import { Doctor } from '../types/doctor';
-import { INITIAL_DOCTORS } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
-
-const DOCTORS_KEY = 'medicore_doctors';
+import { apiClient } from './apiClient';
 
 export const doctorService = {
-  getAll(): Doctor[] {
-    return getStoredItem<Doctor[]>(DOCTORS_KEY, INITIAL_DOCTORS);
+  async getAll(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/doctors${query}`);
+    return Array.isArray(res) ? res : (res?.doctors ?? res ?? []);
   },
 
-  getById(id: string): Doctor | undefined {
-    return this.getAll().find(d => d.id === id || d.doctorId === id);
+  async getById(id: string): Promise<any> {
+    return apiClient.get<any>(`/api/v1/doctors/${id}`);
   },
 
-  getDepartments(): string[] {
-    const doctors = this.getAll();
-    return Array.from(new Set(doctors.map(d => d.department)));
+  async getDepartments(): Promise<string[]> {
+    const res = await apiClient.get<any>('/api/v1/departments');
+    const depts = Array.isArray(res) ? res : (res?.departments ?? res ?? []);
+    return depts.map((d: any) => (typeof d === 'string' ? d : d.name));
   },
 
-  create(data: Omit<Doctor, 'id' | 'doctorId'>): Doctor {
-    const docs = this.getAll();
-    const newDoc: Doctor = {
-      ...data,
-      id: `doc-0${docs.length + 1}`,
-      doctorId: `DOC-${100 + docs.length + 1}`
-    };
-    setStoredItem(DOCTORS_KEY, [...docs, newDoc]);
-    return newDoc;
+  async create(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/doctors', data);
+  },
+
+  async update(id: string, data: any): Promise<any> {
+    return apiClient.put<any>(`/api/v1/doctors/${id}`, data);
+  },
+
+  async delete(id: string): Promise<void> {
+    return apiClient.delete<void>(`/api/v1/doctors/${id}`);
+  },
+
+  async updateSchedule(id: string, schedule: any): Promise<any> {
+    return apiClient.put<any>(`/api/v1/doctors/${id}/schedule`, schedule);
   }
 };

@@ -6,6 +6,7 @@ import { AppShell } from '../components/common/AppShell';
 
 // Pages
 import { LoginPage } from '../pages/auth/LoginPage';
+import { RegisterPage } from '../pages/auth/RegisterPage';
 import { DashboardPage } from '../pages/dashboard/DashboardPage';
 import { PatientListPage } from '../pages/patients/PatientListPage';
 import { PatientNewPage } from '../pages/patients/PatientNewPage';
@@ -28,8 +29,9 @@ import { SettingsPage } from '../pages/settings/SettingsPage';
 export const AppRoutes: React.FC = () => {
   return (
     <Routes>
-      {/* Public Authentication Route */}
+      {/* Public Authentication Routes */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       {/* Protected Routes inside AppShell */}
       <Route element={<ProtectedRoute />}>

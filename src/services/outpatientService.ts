@@ -1,43 +1,18 @@
 
-import { OutpatientQueueItem, OutpatientQueueStatus } from '../types/outpatient';
-import { INITIAL_OUTPATIENT_QUEUE } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
-
-const QUEUE_KEY = 'medicore_outpatient_queue';
+import { apiClient } from './apiClient';
 
 export const outpatientService = {
-  getQueue(): OutpatientQueueItem[] {
-    return getStoredItem<OutpatientQueueItem[]>(QUEUE_KEY, INITIAL_OUTPATIENT_QUEUE);
+  async getQueue(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/outpatients/queue${query}`);
+    return Array.isArray(res) ? res : (res?.queue ?? res ?? []);
   },
 
-  addToQueue(data: Omit<OutpatientQueueItem, 'id' | 'queueNumber' | 'status'>): OutpatientQueueItem {
-    const queue = this.getQueue();
-    const prefix = data.priority === 'Emergency' ? 'EM' : 'A';
-    const nextItem: OutpatientQueueItem = {
-      ...data,
-      id: `q-${Date.now().toString(36)}`,
-      queueNumber: `${prefix}-${100 + queue.length + 1}`,
-      status: 'Waiting'
-    };
-    setStoredItem(QUEUE_KEY, [...queue, nextItem]);
-    return nextItem;
+  async addToQueue(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/outpatients/queue', data);
   },
 
-  updateStatus(id: string, status: OutpatientQueueStatus): OutpatientQueueItem {
-    const queue = this.getQueue();
-    let updated: OutpatientQueueItem | null = null;
-    const next = queue.map(item => {
-      if (item.id === id) {
-        updated = {
-          ...item,
-          status,
-          consultationStartTime: status === 'In Consultation' ? new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : item.consultationStartTime
-        };
-        return updated;
-      }
-      return item;
-    });
-    setStoredItem(QUEUE_KEY, next);
-    return updated!;
+  async updateStatus(id: string, status: string): Promise<any> {
+    return apiClient.patch<any>(`/api/v1/outpatients/queue/${id}/status`, { status });
   }
 };

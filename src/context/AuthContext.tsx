@@ -1,5 +1,6 @@
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
+
 import { User, UserRole } from '../types/auth';
 import { authService } from '../services/authService';
 
@@ -7,36 +8,70 @@ interface AuthContextType {
   currentUser: User | null;
   role: UserRole | null;
   isAuthenticated: boolean;
-  login: (email: string, password?: string, rememberMe?: boolean) => void;
-  logout: () => void;
+  login: (
+    email: string,
+    password?: string,
+    rememberMe?: boolean
+  ) => Promise<void>;
+  logout: () => Promise<void>;
   switchRoleForDemo: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => authService.getCurrentUser());
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [currentUser, setCurrentUser] = useState<User | null>(() =>
+    authService.getCurrentUser()
+  );
 
-  useEffect(() => {
-    // If no user is logged in, default to Administrator for seamless demo initialization
-    if (!currentUser) {
-      const defaultAdmin = authService.getAllUsers()[0];
-      if (defaultAdmin) {
-        setCurrentUser(defaultAdmin);
-      }
+  /**
+   * REAL BACKEND LOGIN
+   *
+   * This calls:
+   * POST /api/v1/auth/login
+   *
+   * The backend returns:
+   * - accessToken
+   * - refreshToken
+   * - user
+   */
+  const login = async (
+    email: string,
+    password?: string,
+    rememberMe: boolean = false
+  ): Promise<void> => {
+    if (!password) {
+      throw new Error('Password is required');
     }
-  }, []);
 
-  const login = (email: string, password?: string, rememberMe: boolean = false) => {
-    const result = authService.login(email, password, rememberMe);
+    const result = await authService.loginAsync(
+      email.trim(),
+      password,
+      rememberMe
+    );
+
     setCurrentUser(result.user);
   };
 
-  const logout = () => {
-    authService.logout();
-    setCurrentUser(null);
+  /**
+   * REAL BACKEND LOGOUT
+   */
+  const logout = async (): Promise<void> => {
+    try {
+      await authService.logoutAsync();
+    } finally {
+      setCurrentUser(null);
+    }
   };
 
+  /**
+   * Demo-only role switching.
+   *
+   * This is intentionally kept because the existing application
+   * may use it for demo/testing purposes.
+   */
   const switchRoleForDemo = (role: UserRole) => {
     const switched = authService.switchRole(role);
     setCurrentUser(switched);
@@ -50,7 +85,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isAuthenticated: !!currentUser,
         login,
         logout,
-        switchRoleForDemo
+        switchRoleForDemo,
       }}
     >
       {children}
@@ -60,8 +95,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
+
   if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
+
   return context;
 };

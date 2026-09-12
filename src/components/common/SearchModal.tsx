@@ -15,6 +15,11 @@ interface SearchModalProps {
 
 export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => {
   const [query, setQuery] = useState('');
+  const [allPatients, setAllPatients] = useState<any[]>([]);
+  const [allDoctors, setAllDoctors] = useState<any[]>([]);
+  const [allAppointments, setAllAppointments] = useState<any[]>([]);
+  const [allMedicines, setAllMedicines] = useState<any[]>([]);
+  const [allInvoices, setAllInvoices] = useState<any[]>([]);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -27,6 +32,19 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
     };
     if (isOpen) {
       window.addEventListener('keydown', handleKeyDown);
+      Promise.all([
+        patientService.getAll().catch(() => []),
+        doctorService.getAll().catch(() => []),
+        appointmentService.getAll().catch(() => []),
+        pharmacyService.getMedicines().catch(() => []),
+        billingService.getInvoices().catch(() => [])
+      ]).then(([p, d, a, m, i]) => {
+        setAllPatients(Array.isArray(p) ? p : (p?.patients ?? []));
+        setAllDoctors(d || []);
+        setAllAppointments(a || []);
+        setAllMedicines(m || []);
+        setAllInvoices(i || []);
+      });
     }
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
@@ -35,24 +53,24 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
 
   const q = query.toLowerCase().trim();
 
-  const patients = patientService.getAll().filter(p =>
-    q && (p.fullName.toLowerCase().includes(q) || p.patientNumber.toLowerCase().includes(q) || p.phone.includes(q))
+  const patients = allPatients.filter((p: any) =>
+    q && ((p.fullName && p.fullName.toLowerCase().includes(q)) || (p.patientNumber && p.patientNumber.toLowerCase().includes(q)) || (p.phone && p.phone.includes(q)))
   ).slice(0, 4);
 
-  const doctors = doctorService.getAll().filter(d =>
-    q && (d.name.toLowerCase().includes(q) || d.department.toLowerCase().includes(q) || d.specialization.toLowerCase().includes(q))
+  const doctors = allDoctors.filter((d: any) =>
+    q && ((d.name && d.name.toLowerCase().includes(q)) || (d.department && d.department.toLowerCase().includes(q)) || (d.specialization && d.specialization.toLowerCase().includes(q)))
   ).slice(0, 3);
 
-  const appointments = appointmentService.getAll().filter(a =>
-    q && (a.appointmentNumber.toLowerCase().includes(q) || a.patientName.toLowerCase().includes(q) || a.doctorName.toLowerCase().includes(q))
+  const appointments = allAppointments.filter((a: any) =>
+    q && ((a.appointmentNumber && a.appointmentNumber.toLowerCase().includes(q)) || (a.patientName && a.patientName.toLowerCase().includes(q)) || (a.doctorName && a.doctorName.toLowerCase().includes(q)))
   ).slice(0, 3);
 
-  const medicines = pharmacyService.getMedicines().filter(m =>
-    q && (m.name.toLowerCase().includes(q) || m.genericName.toLowerCase().includes(q) || m.code.toLowerCase().includes(q))
+  const medicines = allMedicines.filter((m: any) =>
+    q && ((m.name && m.name.toLowerCase().includes(q)) || (m.genericName && m.genericName.toLowerCase().includes(q)) || (m.code && m.code.toLowerCase().includes(q)))
   ).slice(0, 3);
 
-  const invoices = billingService.getInvoices().filter(i =>
-    q && (i.invoiceNumber.toLowerCase().includes(q) || i.patientName.toLowerCase().includes(q))
+  const invoices = allInvoices.filter((i: any) =>
+    q && ((i.invoiceNumber && i.invoiceNumber.toLowerCase().includes(q)) || (i.patientName && i.patientName.toLowerCase().includes(q)))
   ).slice(0, 3);
 
   const handleSelect = (path: string) => {
@@ -94,7 +112,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                 <div>
                   <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Patients</h4>
                   <div className="space-y-1">
-                    {patients.map(p => (
+                    {patients.map((p: any) => (
                       <div
                         key={p.id}
                         onClick={() => handleSelect(`/patients/${p.id}`)}
@@ -119,7 +137,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                 <div>
                   <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Doctors</h4>
                   <div className="space-y-1">
-                    {doctors.map(d => (
+                    {doctors.map((d: any) => (
                       <div
                         key={d.id}
                         onClick={() => handleSelect('/doctors')}
@@ -144,7 +162,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                 <div>
                   <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Appointments</h4>
                   <div className="space-y-1">
-                    {appointments.map(a => (
+                    {appointments.map((a: any) => (
                       <div
                         key={a.id}
                         onClick={() => handleSelect(`/appointments`)}
@@ -169,7 +187,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                 <div>
                   <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Pharmacy Inventory</h4>
                   <div className="space-y-1">
-                    {medicines.map(m => (
+                    {medicines.map((m: any) => (
                       <div
                         key={m.id}
                         onClick={() => handleSelect(`/pharmacy`)}
@@ -194,7 +212,7 @@ export const SearchModal: React.FC<SearchModalProps> = ({ isOpen, onClose }) => 
                 <div>
                   <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Billing & Invoices</h4>
                   <div className="space-y-1">
-                    {invoices.map(i => (
+                    {invoices.map((i: any) => (
                       <div
                         key={i.id}
                         onClick={() => handleSelect(`/billing`)}

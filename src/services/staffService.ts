@@ -1,50 +1,42 @@
 
-import { StaffMember, AttendanceRecord, LeaveRequest, LeaveStatus } from '../types/staff';
-import { INITIAL_STAFF, INITIAL_ATTENDANCE, INITIAL_LEAVE_REQUESTS } from '../data/mockData';
-import { getStoredItem, setStoredItem } from './storage';
-import { auditService } from './auditService';
-
-const STAFF_KEY = 'medicore_staff';
-const ATTENDANCE_KEY = 'medicore_attendance';
-const LEAVE_KEY = 'medicore_leave_requests';
+import { apiClient } from './apiClient';
 
 export const staffService = {
-  getAllStaff(): StaffMember[] {
-    return getStoredItem<StaffMember[]>(STAFF_KEY, INITIAL_STAFF);
+  async getAllStaff(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/staff/employees${query}`);
+    return Array.isArray(res) ? res : (res?.employees ?? res ?? []);
   },
 
-  getAttendance(): AttendanceRecord[] {
-    return getStoredItem<AttendanceRecord[]>(ATTENDANCE_KEY, INITIAL_ATTENDANCE);
+  async createEmployee(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/staff/employees', data);
   },
 
-  getLeaveRequests(): LeaveRequest[] {
-    return getStoredItem<LeaveRequest[]>(LEAVE_KEY, INITIAL_LEAVE_REQUESTS);
+  async getAttendance(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/staff/attendance${query}`);
+    return Array.isArray(res) ? res : (res?.attendance ?? res ?? []);
   },
 
-  updateLeaveStatus(leaveId: string, status: LeaveStatus, approverName: string): LeaveRequest {
-    const requests = this.getLeaveRequests();
-    let updated: LeaveRequest | null = null;
-    const next = requests.map(r => {
-      if (r.id === leaveId) {
-        updated = { ...r, status, approvedBy: approverName };
-        return updated;
-      }
-      return r;
-    });
-    setStoredItem(LEAVE_KEY, next);
+  async checkIn(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/staff/attendance/check-in', data);
+  },
 
-    if (updated) {
-      auditService.log({
-        userId: 'admin-01',
-        userName: approverName,
-        userRole: 'ADMIN',
-        action: 'UPDATE',
-        module: 'STAFF',
-        recordIdentifier: leaveId,
-        details: `Leave request for ${(updated as LeaveRequest).employeeName} was ${status}`
-      });
-    }
+  async checkOut(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/staff/attendance/check-out', data);
+  },
 
-    return updated!;
+  async getLeaveRequests(params?: Record<string, string>): Promise<any[]> {
+    const query = params ? '?' + new URLSearchParams(params).toString() : '';
+    const res = await apiClient.get<any>(`/api/v1/staff/leave${query}`);
+    return Array.isArray(res) ? res : (res?.leaveRequests ?? res ?? []);
+  },
+
+  async createLeaveRequest(data: any): Promise<any> {
+    return apiClient.post<any>('/api/v1/staff/leave', data);
+  },
+
+  async updateLeaveStatus(leaveId: string, status: string, approverName: string): Promise<any> {
+    return apiClient.patch<any>(`/api/v1/staff/leave/${leaveId}/approve`, { status, approverName });
   }
 };

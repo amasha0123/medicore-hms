@@ -1,14 +1,13 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Pill, Plus, AlertTriangle, CheckCircle, Clock, ShoppingCart, Printer } from 'lucide-react';
 import { pharmacyService } from '../../services/pharmacyService';
 import { Medicine, PrescriptionOrder } from '../../types/pharmacy';
 import { StatCard } from '../../components/common/StatCard';
 import { StatusBadge } from '../../components/common/StatusBadge';
+import { useToast } from '../../context/ToastContext';
 import { Modal } from '../../components/common/Modal';
 import { Tabs } from '../../components/common/Tabs';
 import { PrintablePrescription } from '../../components/print/PrintablePrescription';
-import { useToast } from '../../context/ToastContext';
 import { useAuth } from '../../context/AuthContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 
@@ -16,10 +15,29 @@ export const PharmacyPage: React.FC = () => {
   const { showToast } = useToast();
   const { currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState('inventory');
-  const [medicines, setMedicines] = useState<Medicine[]>(() => pharmacyService.getMedicines());
-  const [prescriptions, setPrescriptions] = useState<PrescriptionOrder[]>(() => pharmacyService.getPrescriptions());
+  const [medicines, setMedicines] = useState<Medicine[]>([]);
+  const [prescriptions, setPrescriptions] = useState<PrescriptionOrder[]>([]);
   const [addMedModalOpen, setAddMedModalOpen] = useState(false);
   const [printRx, setPrintRx] = useState<PrescriptionOrder | null>(null);
+  const [loadingMedicines, setLoadingMedicines] = useState(true);
+  const [loadingPrescriptions, setLoadingPrescriptions] = useState(true);
+
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const meds = await pharmacyService.getMedicines();
+        setMedicines(meds);
+        const presc = await pharmacyService.getPrescriptions();
+        setPrescriptions(presc);
+      } catch (err: any) {
+        showToast('error', 'Failed to load pharmacy data', err?.message ?? 'Unknown error');
+      } finally {
+        setLoadingMedicines(false);
+        setLoadingPrescriptions(false);
+      }
+    }
+    fetchData();
+  }, []);
 
   const [newMed, setNewMed] = useState({
     name: '',
@@ -36,19 +54,30 @@ export const PharmacyPage: React.FC = () => {
     location: 'Shelf B-02'
   });
 
-  const handleAddMedicine = (e: React.FormEvent) => {
+  const handleAddMedicine = async (e: React.FormEvent) => {
     e.preventDefault();
-    const created = pharmacyService.addMedicine(newMed);
-    setMedicines(pharmacyService.getMedicines());
-    setAddMedModalOpen(false);
-    showToast('success', 'Medicine Added', `${created.name} added to pharmacy inventory`);
+    try {
+      const created = await pharmacyService.addMedicine(newMed);
+      const updatedMeds = await pharmacyService.getMedicines();
+      setMedicines(updatedMeds);
+      setAddMedModalOpen(false);
+      showToast('success', 'Medicine Added', `${created.name} added to pharmacy inventory`);
+    } catch (err: any) {
+      showToast('error', 'Add Medicine Failed', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleDispense = (rxId: string) => {
-    const updated = pharmacyService.dispensePrescription(rxId, currentUser?.name || 'Amara Okafor, PharmD');
-    setPrescriptions(pharmacyService.getPrescriptions());
-    setMedicines(pharmacyService.getMedicines());
-    showToast('success', 'Prescription Dispensed', `Stock decremented for ${updated.patientName}`);
+  const handleDispense = async (rxId: string) => {
+    try {
+      const updated = await pharmacyService.dispensePrescription(rxId, currentUser?.name || 'Amara Okafor, PharmD');
+      const updatedPresc = await pharmacyService.getPrescriptions();
+      const updatedMeds = await pharmacyService.getMedicines();
+      setPrescriptions(updatedPresc);
+      setMedicines(updatedMeds);
+      showToast('success', 'Prescription Dispensed', `Stock decremented for ${updated.patientName}`);
+    } catch (err: any) {
+      showToast('error', 'Dispense Failed', err?.message ?? 'Unknown error');
+    }
   };
 
   const tabs = [

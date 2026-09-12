@@ -34,10 +34,34 @@ export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [patientStatsTimeframe, setPatientStatsTimeframe] = useState<'7d' | '30d' | '6m' | '1y'>('30d');
 
-  const appointments = appointmentService.getAll().slice(0, 5);
-  const totalPatients = patientService.getAll().length;
-  const totalDoctors = doctorService.getAll().length;
-  const auditLogs = auditService.getAll().slice(0, 6);
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [totalPatients, setTotalPatients] = useState(0);
+  const [totalDoctors, setTotalDoctors] = useState(0);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadData() {
+      try {
+        setLoading(true);
+        const [apts, pats, docs, logs] = await Promise.all([
+          appointmentService.getAll().catch(() => []),
+          patientService.getAll().catch(() => []),
+          doctorService.getAll().catch(() => []),
+          auditService.getAll().catch(() => [])
+        ]);
+        setAppointments(Array.isArray(apts) ? apts.slice(0, 5) : []);
+        setTotalPatients(Array.isArray(pats) ? pats.length : 0);
+        setTotalDoctors(Array.isArray(docs) ? docs.length : 0);
+        setAuditLogs(Array.isArray(logs) ? logs.slice(0, 6) : []);
+      } catch (error) {
+        console.error('Failed to load dashboard data', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadData();
+  }, []);
 
   // Mock Recharts Data for Timeframes
   const patientTrendData = {
@@ -463,12 +487,12 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs font-semibold text-slate-800 leading-tight">
-                    {log.details}
+                    {log.description || log.details || 'System activity recorded'}
                   </p>
                   <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
-                    <span>{log.userName} ({log.userRole})</span>
+                    <span>{log.userName || 'System'} ({log.userRole || 'User'})</span>
                     <span>•</span>
-                    <span>{log.timestamp.split(' ')[1]}</span>
+                    <span>{log.timestamp ? new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--'}</span>
                   </p>
                 </div>
               </div>

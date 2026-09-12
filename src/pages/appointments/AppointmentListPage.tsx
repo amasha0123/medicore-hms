@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   Plus,
@@ -24,14 +24,35 @@ import { useToast } from '../../context/ToastContext';
 
 export const AppointmentListPage: React.FC = () => {
   const { showToast } = useToast();
-  const [appointments, setAppointments] = useState<Appointment[]>(() => appointmentService.getAll());
+  const [appointments, setAppointments] = useState<any[]>([]);
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('calendar');
   const [calendarView, setCalendarView] = useState<'day' | 'week' | 'month'>('week');
   const [bookModalOpen, setBookModalOpen] = useState(false);
   const [cancelAppointmentId, setCancelAppointmentId] = useState<string | null>(null);
 
-  const doctors = doctorService.getAll();
-  const patients = patientService.getAll();
+  useEffect(() => {
+    const load = async () => {
+      try {
+        setLoading(true);
+        const [apts, docs, pats] = await Promise.all([
+          appointmentService.getAll(),
+          doctorService.getAll(),
+          patientService.getAll()
+        ]);
+        setAppointments(apts);
+        setDoctors(docs);
+        setPatients(pats);
+      } catch (err: any) {
+        showToast('error', 'Load failed', err?.message ?? 'Could not load data');
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
   const [bookingForm, setBookingForm] = useState({
     patientId: patients[0]?.id || '',
@@ -42,44 +63,55 @@ export const AppointmentListPage: React.FC = () => {
     reason: 'Routine consultation checkup'
   });
 
-  const handleBook = (e: React.FormEvent) => {
+  const handleBook = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pat = patients.find(p => p.id === bookingForm.patientId);
-    const doc = doctors.find(d => d.id === bookingForm.doctorId);
+    const pat = patients.find((p: any) => p.id === bookingForm.patientId);
+    const doc = doctors.find((d: any) => d.id === bookingForm.doctorId);
     if (!pat || !doc) return;
 
-    const created = appointmentService.create({
-      patientId: pat.id,
-      patientName: pat.fullName,
-      patientPhone: pat.phone,
-      doctorId: doc.id,
-      doctorName: doc.name,
-      department: doc.department,
-      date: bookingForm.date,
-      time: bookingForm.time,
-      type: bookingForm.type,
-      status: 'Confirmed',
-      reason: bookingForm.reason,
-      room: doc.schedule[0]?.room || 'Clinic Room 101'
-    });
-
-    setAppointments(appointmentService.getAll());
-    setBookModalOpen(false);
-    showToast('success', 'Appointment Booked', `Confirmed for ${created.patientName} on ${created.date} at ${created.time}`);
+    try {
+      const created = await appointmentService.create({
+        patientId: pat.id,
+        patientName: pat.fullName,
+        patientPhone: pat.phone,
+        doctorId: doc.id,
+        doctorName: doc.name,
+        department: doc.department,
+        date: bookingForm.date,
+        time: bookingForm.time,
+        type: bookingForm.type,
+        status: 'Confirmed',
+        reason: bookingForm.reason,
+        room: doc.schedule?.[0]?.room || 'Clinic Room 101'
+      });
+      setAppointments(await appointmentService.getAll());
+      setBookModalOpen(false);
+      showToast('success', 'Appointment Booked', `Confirmed for ${created.patientName} on ${created.date} at ${created.time}`);
+    } catch (err: any) {
+      showToast('error', 'Booking failed', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleStatusChange = (id: string, status: AppointmentStatus) => {
-    appointmentService.updateStatus(id, status);
-    setAppointments(appointmentService.getAll());
-    showToast('info', 'Status Updated', `Appointment marked as ${status}`);
+  const handleStatusChange = async (id: string, status: AppointmentStatus) => {
+    try {
+      await appointmentService.updateStatus(id, status);
+      setAppointments(await appointmentService.getAll());
+      showToast('info', 'Status Updated', `Appointment marked as ${status}`);
+    } catch (err: any) {
+      showToast('error', 'Update failed', err?.message ?? 'Unknown error');
+    }
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (cancelAppointmentId) {
-      appointmentService.updateStatus(cancelAppointmentId, 'Cancelled');
-      setAppointments(appointmentService.getAll());
-      showToast('warning', 'Appointment Cancelled', 'The scheduled slot has been released.');
-      setCancelAppointmentId(null);
+      try {
+        await appointmentService.cancel(cancelAppointmentId);
+        setAppointments(await appointmentService.getAll());
+        showToast('warning', 'Appointment Cancelled', 'The scheduled slot has been released.');
+        setCancelAppointmentId(null);
+      } catch (err: any) {
+        showToast('error', 'Cancel failed', err?.message ?? 'Unknown error');
+      }
     }
   };
 
