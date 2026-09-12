@@ -13,6 +13,7 @@ interface AuthContextType {
     password?: string,
     rememberMe?: boolean
   ) => Promise<void>;
+  loginAsGuest: (role?: UserRole) => void;
   logout: () => Promise<void>;
   switchRoleForDemo: (role: UserRole) => void;
 }
@@ -56,6 +57,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   /**
+   * GUEST LOGIN (NO AUTHENTICATION REQUIRED)
+   */
+  const loginAsGuest = (role: UserRole = 'DOCTOR') => {
+    const result = authService.loginAsGuest(role);
+    setCurrentUser(result.user);
+  };
+
+  /**
    * REAL BACKEND LOGOUT
    */
   const logout = async (): Promise<void> => {
@@ -84,6 +93,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         role: currentUser?.role || null,
         isAuthenticated: !!currentUser,
         login,
+        loginAsGuest,
         logout,
         switchRoleForDemo,
       }}

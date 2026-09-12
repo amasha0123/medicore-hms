@@ -1,11 +1,11 @@
 
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ShieldCheck, HeartPulse, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, Loader2, CheckCircle2, ShieldCheck, HeartPulse, ArrowRight, Sparkles, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { DEMO_ACCOUNTS } from '../../data/mockData';
-import { DemoAccount } from '../../types/auth';
+import { DemoAccount, UserRole } from '../../types/auth';
 import { Modal } from '../../components/common/Modal';
 
 export const LoginPage: React.FC = () => {
@@ -21,16 +21,35 @@ export const LoginPage: React.FC = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetSent, setResetSent] = useState(false);
 
-  const { login } = useAuth();
+  const { login, loginAsGuest } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
+
+  const handleGuestLogin = (guestRole: UserRole = 'DOCTOR') => {
+    setIsLoading(true);
+    try {
+      loginAsGuest(guestRole);
+      setIsSuccess(true);
+      showToast(
+        'success',
+        'Guest Access Granted',
+        `Browsing as Guest (${guestRole}) without login authentication.`
+      );
+      setTimeout(() => {
+        navigate('/dashboard');
+      }, 500);
+    } catch (err: any) {
+      setIsLoading(false);
+      showToast('error', 'Guest Access Failed', err?.message || 'Could not initiate guest session.');
+    }
+  };
 
   const handleDemoClick = (account: DemoAccount) => {
     setEmail(account.email);
     setPassword('');
     setSelectedDemoRole(account.role);
     setErrors({});
-    showToast('info', `Credentials loaded for ${account.roleName}`, 'Click "Sign in to MediCore" to proceed.');
+    showToast('info', `Credentials loaded for ${account.roleName}`, 'Click "Sign in to MediCore" or use 1-Click Guest Access.');
   };
 
   const validate = () => {
@@ -245,6 +264,26 @@ export const LoginPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Divider */}
+            <div className="relative flex items-center justify-center my-3">
+              <div className="border-t border-slate-200 w-full" />
+              <span className="bg-white px-2.5 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
+                Or
+              </span>
+              <div className="border-t border-slate-200 w-full" />
+            </div>
+
+            {/* Simple Guest Login Button */}
+            <button
+              type="button"
+              onClick={() => handleGuestLogin('DOCTOR')}
+              disabled={isLoading || isSuccess}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 border border-slate-200/80 transition-all shadow-2xs disabled:opacity-50"
+            >
+              <User className="w-4 h-4 text-slate-500" />
+              <span>Continue as Guest</span>
+            </button>
+
             {/* Registration Link */}
             <div className="text-center pt-2">
               <p className="text-xs text-slate-600">
@@ -271,7 +310,7 @@ export const LoginPage: React.FC = () => {
           <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2.5">
             <div>
               <h3 className="text-sm font-bold text-slate-800">Demo Accounts</h3>
-              <p className="text-xs text-slate-500">Click any role to autofill credentials</p>
+              <p className="text-xs text-slate-500">1-click instant login without credentials</p>
             </div>
             <span className="text-[10px] font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
               7 Roles Available
@@ -284,13 +323,15 @@ export const LoginPage: React.FC = () => {
               return (
                 <div
                   key={account.role}
-                  onClick={() => handleDemoClick(account)}
-                  className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer group ${isSelected
+                  className={`flex items-center justify-between p-2.5 rounded-xl border transition group ${isSelected
                     ? 'bg-blue-50/80 border-blue-300 ring-1 ring-blue-400/30'
                     : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                     }`}
                 >
-                  <div className="flex items-center gap-2.5 min-w-0">
+                  <div
+                    onClick={() => handleDemoClick(account)}
+                    className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer"
+                  >
                     <span className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition ${isSelected
                       ? 'bg-blue-600 text-white shadow-sm'
                       : 'bg-slate-100 text-slate-700 group-hover:bg-blue-100 group-hover:text-blue-700'
@@ -305,9 +346,15 @@ export const LoginPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <span className="text-[11px] font-semibold text-blue-600 opacity-0 group-hover:opacity-100 transition shrink-0">
-                    Autofill &rarr;
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleGuestLogin(account.role)}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded-lg transition shrink-0"
+                    title={`Instant login as ${account.roleName} without password`}
+                  >
+                    <span>Instant Login</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
                 </div>
               );
             })}

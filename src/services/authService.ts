@@ -537,6 +537,54 @@ export const authService = {
 
 
   // ===========================================================================
+  // GUEST LOGIN (NO AUTHENTICATION REQUIRED)
+  // ===========================================================================
+
+  loginAsGuest(
+    role: UserRole = 'DOCTOR'
+  ): {
+    user: User;
+    token: string;
+  } {
+    const guestId = `usr-guest-${Date.now().toString(36)}`;
+    const mockToken = `medicore_jwt_guest_${role.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+    const guestUser: User = {
+      id: guestId,
+      name: 'Guest User',
+      email: 'guest@medicore.hospital',
+      username: 'guest_observer',
+      role,
+      department: role === 'DOCTOR' ? 'Cardiology' : 'General Observation',
+      status: 'Active',
+      lastLogin: new Date().toISOString().replace('T', ' ').substring(0, 16),
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+
+    setTokens(mockToken, mockToken, true);
+    setStoredItem(CURRENT_USER_KEY, guestUser);
+    localStorage.setItem(TOKEN_KEY, mockToken);
+    sessionStorage.setItem(TOKEN_KEY, mockToken);
+
+    auditService.log({
+      userId: guestUser.id,
+      userName: guestUser.name,
+      userRole: guestUser.role,
+      action: 'LOGIN',
+      module: 'AUTH',
+      recordIdentifier: 'SESSION-GUEST',
+      details: `User accessed system via Guest Account without authentication (${role})`,
+      status: 'SUCCESS'
+    });
+
+    return {
+      user: guestUser,
+      token: mockToken
+    };
+  },
+
+
+  // ===========================================================================
   // LOGOUT
   // ===========================================================================
 
