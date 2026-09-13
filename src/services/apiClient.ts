@@ -15,7 +15,9 @@
 
 const API_SERVER =
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? '' : 'http://localhost:5000');
+  (import.meta.env.PROD
+    ? 'https://backend-production-7b43.up.railway.app'
+    : 'http://localhost:5000');
 
 const BASE_URL = API_SERVER.replace(/\/+$/, '');
 
