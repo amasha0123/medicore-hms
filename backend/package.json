@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "postinstall": "prisma generate",
-    "build": "prisma generate && tsc",
+    "build": "tsc",
     "start": "node dist/server.js",
     "lint": "tsc --noEmit",
     "test": "jest --detectOpenHandles --forceExit",
