@@ -1,5 +1,5 @@
 
-import { apiClient, IS_MOCK_MODE } from './apiClient';
+import { apiClient, IS_MOCK_MODE, getAccessToken } from './apiClient';
 
 export interface AuditLogParams {
   userId?: string;
@@ -19,12 +19,17 @@ export const auditService = {
   /**
    * Log an audit event.
    * - In MOCK MODE: stores in-memory only (no network call).
-   * - In REAL API MODE: fires a best-effort POST to the backend.
+   * - In REAL API MODE: fires a best-effort POST to the backend only when authenticated.
    *   Never throws — audit logging should never break the UI.
    */
   log(params: AuditLogParams): void {
     if (IS_MOCK_MODE) {
       mockLogs.unshift(params);
+      return;
+    }
+    const token = getAccessToken();
+    if (!token) {
+      // Backend automatically logs unauthenticated events; don't trigger 401
       return;
     }
     // Fire-and-forget: don't await, don't block the caller

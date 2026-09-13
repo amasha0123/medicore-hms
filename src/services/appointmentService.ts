@@ -14,7 +14,19 @@ export const appointmentService = {
   },
 
   async create(data: any): Promise<any> {
-    return apiClient.post<any>('/api/v1/appointments', data);
+    const payload = {
+      patientId: data.patientId,
+      doctorId: data.doctorId,
+      departmentId: data.departmentId,
+      appointmentDate: data.appointmentDate || data.date || new Date().toISOString().split('T')[0],
+      startTime: data.startTime || data.time || '10:00 AM',
+      endTime: data.endTime,
+      appointmentType: data.appointmentType || data.type || 'Routine Consult',
+      reason: data.reason || 'General Consultation',
+      notes: data.notes,
+      room: data.room || 'Consultation Room 1'
+    };
+    return apiClient.post<any>('/api/v1/appointments', payload);
   },
 
   async updateStatus(id: string, status: string): Promise<any> {

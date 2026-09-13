@@ -25,31 +25,33 @@ export const LoginPage: React.FC = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
-  const handleGuestLogin = (guestRole: UserRole = 'DOCTOR') => {
+  const handleGuestLogin = async (guestRole: UserRole = 'DOCTOR') => {
+    const demo = DEMO_ACCOUNTS.find(d => d.role === guestRole) || DEMO_ACCOUNTS[1];
     setIsLoading(true);
+    setErrors({});
     try {
-      loginAsGuest(guestRole);
+      await login(demo.email, 'Admin@123!');
       setIsSuccess(true);
       showToast(
         'success',
-        'Guest Access Granted',
-        `Browsing as Guest (${guestRole}) without login authentication.`
+        'Authentication Successful',
+        `Logged in as ${demo.roleName} with verified Supabase session.`
       );
       setTimeout(() => {
         navigate('/dashboard');
       }, 500);
     } catch (err: any) {
       setIsLoading(false);
-      showToast('error', 'Guest Access Failed', err?.message || 'Could not initiate guest session.');
+      showToast('error', 'Authentication Failed', err?.message || 'Could not initiate session.');
     }
   };
 
   const handleDemoClick = (account: DemoAccount) => {
     setEmail(account.email);
-    setPassword('');
+    setPassword('Admin@123!');
     setSelectedDemoRole(account.role);
     setErrors({});
-    showToast('info', `Credentials loaded for ${account.roleName}`, 'Click "Sign in to MediCore" or use 1-Click Guest Access.');
+    showToast('info', `Credentials loaded for ${account.roleName}`, 'Password pre-filled. Click "Sign in" or "Instant Login" below.');
   };
 
   const validate = () => {

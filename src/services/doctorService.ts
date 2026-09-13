@@ -19,7 +19,41 @@ export const doctorService = {
   },
 
   async create(data: any): Promise<any> {
-    return apiClient.post<any>('/api/v1/doctors', data);
+    const rawName = (data.name || '').replace(/^Dr\.?\s*/i, '').trim();
+    const parts = rawName.split(' ');
+    const firstName = data.firstName || parts[0] || 'Doctor';
+    const lastName = data.lastName || (parts.length > 1 ? parts.slice(1).join(' ') : 'Specialist');
+    const registrationNumber = data.registrationNumber || data.licenseNumber || `REG-${Date.now().toString().slice(-6)}`;
+
+    let departmentId = data.departmentId;
+    if (!departmentId) {
+      try {
+        const res = await apiClient.get<any>('/api/v1/departments');
+        const deptList = Array.isArray(res) ? res : (res?.departments ?? res ?? []);
+        const matched = deptList.find((d: any) =>
+          (d.name && data.department && d.name.toLowerCase() === data.department.toLowerCase()) ||
+          (d.id && data.department && d.id === data.department)
+        );
+        departmentId = matched ? matched.id : deptList[0]?.id;
+      } catch {
+        // Fallback
+      }
+    }
+
+    const payload = {
+      firstName,
+      lastName,
+      registrationNumber,
+      specialization: data.specialization || 'General Medicine',
+      departmentId,
+      phone: data.phone || '+1 555-0100',
+      email: data.email || `${firstName.toLowerCase()}.${lastName.toLowerCase()}@medicore.hospital`,
+      experienceYears: Number(data.experienceYears) || 5,
+      consultationFee: Number(data.consultationFee) || 100,
+      status: data.status || 'Available'
+    };
+
+    return apiClient.post<any>('/api/v1/doctors', payload);
   },
 
   async update(id: string, data: any): Promise<any> {

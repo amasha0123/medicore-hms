@@ -1,4 +1,4 @@
-﻿/**
+/**
  * MediCore HMS - Central API Client
  *
  * Real backend API client.
@@ -284,9 +284,18 @@ async function request<T>(
   // Handle 401 - Refresh token once
   // ---------------------------------------------------------------------------
 
+  const isAuthRoute =
+    path.includes('/auth/login') ||
+    path.includes('/auth/refresh') ||
+    path.includes('/auth/register');
+
+  const hasRefreshToken = !!getRefreshToken();
+
   if (
     response.status === 401 &&
-    !retried
+    !retried &&
+    !isAuthRoute &&
+    hasRefreshToken
   ) {
     if (isRefreshing) {
       return new Promise<T>(
@@ -455,7 +464,17 @@ export const apiClient = {
       method: 'DELETE',
     }),
 };
-export function clearTokens() {
-  throw new Error("Function not implemented.");
+
+export function clearTokens(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(REFRESH_KEY);
+    localStorage.removeItem('medicore_current_user');
+    sessionStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(REFRESH_KEY);
+    sessionStorage.removeItem('medicore_current_user');
+  } catch (err) {
+    console.error('[MediCore Auth] Failed to clear tokens from storage:', err);
+  }
 }
 

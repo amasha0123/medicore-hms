@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
 import { User, UserRole } from '../types/auth';
 import { authService } from '../services/authService';
@@ -26,6 +26,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentUser, setCurrentUser] = useState<User | null>(() =>
     authService.getCurrentUser()
   );
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      console.warn('[MediCore Auth] Session expired event received, clearing session state');
+      setCurrentUser(null);
+    };
+
+    window.addEventListener('medicore:session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('medicore:session-expired', handleSessionExpired);
+    };
+  }, []);
 
   /**
    * REAL BACKEND LOGIN
