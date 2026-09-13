@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: medicore-backend
+    env: node
+    rootDir: medicore-backend
+    buildCommand: npm install && npx prisma generate && npm run build
+    startCommand: npm start
+    plan: free
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5000
+      - key: DATABASE_URL
+        value: postgresql://postgres.oiqxhkqcltwscxxaqska:Amasha123456%23%23@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: DIRECT_URL
+        value: postgresql://postgres.oiqxhkqcltwscxxaqska:Amasha123456%23%23@aws-0-ap-southeast-1.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: JWT_SECRET
+        value: medicore-super-secure-jwt-secret-key-2026
+      - key: JWT_REFRESH_SECRET
+        value: medicore-super-secure-refresh-jwt-secret-key-2026
+      - key: FRONTEND_URL
+        value: https://medicore-hms-five.vercel.app

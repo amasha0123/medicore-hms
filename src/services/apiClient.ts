@@ -14,7 +14,8 @@
  */
 
 const API_SERVER =
-  import.meta.env.VITE_API_URL || 'http://localhost:5000';
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? '' : 'http://localhost:5000');
 
 const BASE_URL = API_SERVER.replace(/\/+$/, '');
 
@@ -272,13 +273,26 @@ async function request<T>(
     `[MediCore API] ${options.method || 'GET'} ${url}`
   );
 
-  const response = await fetch(
-    url,
-    {
-      ...options,
-      headers,
+  let response: Response;
+  try {
+    response = await fetch(
+      url,
+      {
+        ...options,
+        headers,
+      }
+    );
+  } catch (netErr: any) {
+    console.error(`[MediCore API Network Error] Failed to reach ${url}:`, netErr);
+    const msg = netErr?.message || '';
+    if (msg === 'Load failed' || msg.includes('Failed to fetch') || netErr?.name === 'TypeError') {
+      throw new ApiError(
+        `Unable to reach backend server at ${url || 'current domain'}. If you deployed the app, make sure your backend server is deployed and online, and VITE_API_URL is configured in your hosting environment variables.`,
+        0
+      );
     }
-  );
+    throw netErr;
+  }
 
   // ---------------------------------------------------------------------------
   // Handle 401 - Refresh token once
